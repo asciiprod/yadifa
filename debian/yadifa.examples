@@ -1,0 +1,4 @@
+etc/yadifad.conf.example
+etc/yadifad-master.conf.example
+etc/yadifad-slave.conf.example
+var/zones/masters/somedomain.eu.zone

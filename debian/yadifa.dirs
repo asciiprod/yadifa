@@ -1,0 +1,8 @@
+etc/yadifa
+usr/sbin
+var/lib/yadifa
+var/lib/yadifa/keys
+var/lib/yadifa/masters
+var/lib/yadifa/slaves
+var/lib/yadifa/xfr
+var/log/yadifa

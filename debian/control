@@ -1,0 +1,46 @@
+Source: yadifa
+Section: net
+Priority: optional
+Maintainer: Markus Schade <markus.schade@gmail.com>
+Build-Depends: debhelper (>= 8), dpkg-dev (>= 1.16.1~), autotools-dev, libssl-dev, dh-systemd
+Standards-Version: 3.9.5
+Homepage: http://www.yadifa.eu
+
+Package: yadifa
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, netbase, adduser, lsb-base (>= 3.2-14), libyadifa (=${binary:Version})
+Description: Internet Domain Name Server
+ YADIFA is a lightweight authoritative Name Server with DNSSEC capabilities.
+ Developed by the passionate people behind the .eu top-level domain, YADIFA has
+ been built from scratch to face today's DNS challenges, with no compromise on
+ security, speed and stability, to offer a better and safer Internet experience.
+ .
+ YADIFA has a simple configuration syntax and can handle more queries per
+ second while maintaining one of the lowest memory footprints in the industry.
+ YADIFA also has one of the fastest zone file load times ever recorded on a name
+ server.
+ .
+ This package provides the server and related configuration files
+
+Package: libyadifa
+Section: libs
+Priority: standard
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Yadifa DNS Shared Libraries used by YADIFA
+ ${Description}
+ .
+ This package delivers the yadifa dnscore, dnsdb, dnszone shared libraries used
+ by the YADIFA daemon.
+
+
+Package: yadifa-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}
+Description: yadifa development libraries and header files
+ YADIFA (Yet Another DNS Implementaion For All) is a lightweight authoritative
+ Name Server with DNSSEC capabilities. It has been developed from scratch by
+ the .eu TLD registry.
+ .
+ This package contains development libraries and header files
