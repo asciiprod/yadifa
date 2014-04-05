@@ -27,7 +27,7 @@ Subject: fix lintian whatis warning and FHS in yadifad.conf manpage
  The configuration supports included files.
  .br
 -example: include /usr/local/var/zones/master/yadifad\-2.conf 
-+example: include /var/cache/yadifa/master/yadifad\-2.conf 
++example: include /var/lib/yadifa/master/yadifad\-2.conf 
  .PP
  The configuration files can be nested. 
  .PP
@@ -53,15 +53,15 @@ Subject: fix lintian whatis warning and FHS in yadifad.conf manpage
  
          # The path of the zone files
 -        datapath                "/usr/local/var/zones"
-+        datapath                "/var/cache/yadifa"
++        datapath                "/var/lib/yadifa"
  
          # The path of the DNSSEC keys
 -        keyspath                "/usr/local/var/zones/keys"
-+        keyspath                "/var/cache/yadifa/keys"
++        keyspath                "/var/lib/yadifa/keys"
  
          # The path of the transfer and journaling files (AXFR & IXFR)
 -        xfrpath                 "/usr/local/var/zones/xfr"
-+        xfrpath                 "/var/cache/yadifa/xfr"
++        xfrpath                 "/var/lib/yadifa/xfr"
  
          # The version returned by a query to version.yadifa. CH TXT
 -        version                 "1.0.0rc2"
