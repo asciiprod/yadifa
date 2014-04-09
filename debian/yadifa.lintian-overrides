@@ -1,4 +1,0 @@
-# sbin source directory contains erroneously a COPYING file with GPL,
-# while the top level COPYING as well as the yadifa.eu website state
-# that the whole source is licensed under a 3-clause BSD license
-yadifa: possible-gpl-code-linked-with-openssl

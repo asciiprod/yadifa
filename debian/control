@@ -9,7 +9,7 @@ Vcs-Git: https://github.com/asciiprod/yadifa.git
 
 Package: yadifa
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, netbase, adduser, lsb-base (>= 3.2-14), libyadifa (=${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, netbase, adduser, lsb-base (>= 3.2-14), libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
 Description: Internet Domain Name Server
  YADIFA is a lightweight authoritative Name Server with DNSSEC capabilities.
  Developed by the passionate people behind the .eu top-level domain, YADIFA has
@@ -23,25 +23,48 @@ Description: Internet Domain Name Server
  .
  This package provides the server and related configuration files
 
-Package: libyadifa
+Package: libdnscore0
 Section: libs
 Priority: standard
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Yadifa DNS Shared Libraries used by YADIFA
+Description: Yadifa DNS Core Shared Library used by YADIFA
  ${Description}
  .
- This package delivers the yadifa dnscore, dnsdb, dnszone shared libraries used
+ This package delivers the yadifa dnscore shared library used
+ by the YADIFA daemon.
+
+Package: libdnsdb0
+Section: libs
+Priority: standard
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Yadifa DNS DB Shared Library used by YADIFA
+ ${Description}
+ .
+ This package delivers the yadifa dnsdb shared library used
+ by the YADIFA daemon.
+
+Package: libdnszone0
+Section: libs
+Priority: standard
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Yadifa DNS Zone Shared Library used by YADIFA
+ ${Description}
+ .
+ This package delivers the yadifa dnszone shared library used
  by the YADIFA daemon.
 
 
-Package: yadifa-dev
+Package: libyadifa-dev
 Section: libdevel
 Architecture: any
-Depends: ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
 Description: yadifa development libraries and header files
  YADIFA (Yet Another DNS Implementaion For All) is a lightweight authoritative
  Name Server with DNSSEC capabilities. It has been developed from scratch by
  the .eu TLD registry.
  .
- This package contains development libraries and header files
+ This package contains archive-style libraries and header files for
+ libdnscore0, libdnsdb0 and libdnszone0
