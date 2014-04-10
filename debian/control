@@ -5,57 +5,49 @@ Maintainer: Markus Schade <markus.schade@gmail.com>
 Build-Depends: debhelper (>= 8), dpkg-dev (>= 1.16.1~), autotools-dev, libssl-dev, dh-systemd
 Standards-Version: 3.9.5
 Homepage: http://www.yadifa.eu
-Vcs-Git: https://github.com/asciiprod/yadifa.git
+Vcs-Git: git://github.com/asciiprod/yadifa.git
+Vcs-Browser: https://github.com/asciiprod/yadifa.git
 
 Package: yadifa
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, netbase, adduser, lsb-base (>= 3.2-14), libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
 Description: Internet Domain Name Server
- YADIFA is a lightweight authoritative Name Server with DNSSEC capabilities.
- Developed by the passionate people behind the .eu top-level domain, YADIFA has
- been built from scratch to face today's DNS challenges, with no compromise on
- security, speed and stability, to offer a better and safer Internet experience.
- .
- YADIFA has a simple configuration syntax and can handle more queries per
- second while maintaining one of the lowest memory footprints in the industry.
- YADIFA also has one of the fastest zone file load times ever recorded on a name
- server.
+ ${Description}
  .
  This package provides the server and related configuration files
 
 Package: libdnscore0
 Section: libs
-Priority: standard
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Yadifa DNS Core Shared Library used by YADIFA
+Description: DNS Core Shared Library used by YADIFA
  ${Description}
  .
- This package delivers the yadifa dnscore shared library used
- by the YADIFA daemon.
+ This package delivers the dnscore shared library used
+ by the YADIFA daemon. It provides basic network and
+ DNS query/conversion functions.
 
 Package: libdnsdb0
 Section: libs
-Priority: standard
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Yadifa DNS DB Shared Library used by YADIFA
+Description: DNS DB Shared Library used by YADIFA
  ${Description}
  .
- This package delivers the yadifa dnsdb shared library used
- by the YADIFA daemon.
+ This package delivers the dnsdb shared library used
+ by the YADIFA daemon. It handles the internal database
+ and provides NSEC3 and DNSSEC capabilities.
 
 Package: libdnszone0
 Section: libs
-Priority: standard
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Yadifa DNS Zone Shared Library used by YADIFA
+Description: DNS Zone Shared Library used by YADIFA
  ${Description}
  .
- This package delivers the yadifa dnszone shared library used
- by the YADIFA daemon.
-
+ This package delivers the dnszone shared library used
+ by the YADIFA daemon. It handles AXFR and IXFR zone
+ transfers.
 
 Package: libyadifa-dev
 Section: libdevel
