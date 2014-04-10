@@ -13,6 +13,7 @@ include /usr/share/dpkg/buildflags.mk
 	dh $@  --with autotools-dev
 
 override_dh_clean:
+	dh_clean
 	rm -f debian/substvars
 
 override_dh_auto_configure:
@@ -23,7 +24,8 @@ override_dh_auto_configure:
 		--enable-static \
 		--with-gnu-ld
 
-override_binary-indep:
+override_dh_gencontrol:
 	for i in $$(sed -n '/^Package:/s/^.* //p' debian/control); do cat debian/vars.in >> debian/$$i.substvars; done
 	cat debian/vars.in >> debian/substvars
+	dh_gencontrol -i
 
