@@ -55,7 +55,7 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
 Description: yadifa development libraries and header files
  ${Description}
-.
+ .
  This package contains the header files and static libraries needed for
  developing applications for YADIFA.
 
