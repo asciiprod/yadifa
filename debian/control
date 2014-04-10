@@ -54,9 +54,8 @@ Section: libdevel
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
 Description: yadifa development libraries and header files
- YADIFA (Yet Another DNS Implementaion For All) is a lightweight authoritative
- Name Server with DNSSEC capabilities. It has been developed from scratch by
- the .eu TLD registry.
- .
- This package contains archive-style libraries and header files for
- libdnscore0, libdnsdb0 and libdnszone0
+ ${Description}
+.
+ This package contains the header files and static libraries needed for
+ developing applications for YADIFA.
+
