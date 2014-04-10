@@ -23,14 +23,14 @@ case "$1" in
 	# lets give them a yadifa user/group in all cases.
 	getent group yadifa >/dev/null 2>&1 || addgroup --system yadifa
 	getent passwd yadifa >/dev/null 2>&1 ||
-	    adduser --system --home /var/lib/yadifa --no-create-home \
-		--disabled-password --ingroup yadifa yadifa
+		adduser --system --home /var/lib/yadifa --no-create-home \
+			--disabled-password --ingroup yadifa yadifa
 
 	# no sumfile means you get the default
-	[ -f /var/lib/yadifa/yadifa-default.md5sum ] || 
-	    echo "37bc6cb6782f8ec0e0eb0301880d65a4  /etc/default/yadifa" > /var/lib/yadifa/yadifa-default.md5sum
+	[ -f /var/lib/yadifa/yadifa-default.md5sum ] ||
+	   echo "37bc6cb6782f8ec0e0eb0301880d65a4  /etc/default/yadifa" > /var/lib/yadifa/yadifa-default.md5sum
 
-	if [ -f /etc/default/yadifa ] && \
+	if [ -e /etc/default/yadifa ] && \
 	   [ "$(cat /var/lib/yadifa/yadifa-default.md5sum)" = "$(md5sum /etc/default/yadifa)" ]; then
 	    config="/etc/default/yadifa"
 	elif [ ! -e /etc/default/yadifa ]; then
@@ -39,12 +39,16 @@ case "$1" in
 	    config="/etc/default/yadifa.dpkg-dist"
 	fi
 
-        dpkg-statoverride --list /var/lib/yadifa/keys > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/keys
-        dpkg-statoverride --list /var/lib/yadifa/masters > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/masters
-        dpkg-statoverride --list /var/lib/yadifa/slaves > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/slaves
-        dpkg-statoverride --list /var/lib/yadifa/xfr > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/xfr
-        dpkg-statoverride --list /var/log/yadifa > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/log/yadifa
-        dpkg-statoverride --list /etc/yadifa/yadifad.conf > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0640 /etc/yadifa/yadifad.conf
+	if [ "$config" = "/etc/default/yadifa" ]; then
+	    md5sum /etc/default/yadifa > /var/lib/yadifa/yadifa-default.md5sum
+	fi
+
+	dpkg-statoverride --list /var/lib/yadifa/keys > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/keys
+	dpkg-statoverride --list /var/lib/yadifa/masters > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/masters
+	dpkg-statoverride --list /var/lib/yadifa/slaves > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/slaves
+	dpkg-statoverride --list /var/lib/yadifa/xfr > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/xfr
+	dpkg-statoverride --list /var/log/yadifa > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/log/yadifa
+	dpkg-statoverride --list /etc/yadifa/yadifad.conf > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0640 /etc/yadifa/yadifad.conf
 
 	if pidof /usr/sbin/yadifad >/dev/null 2>&1; then
 	    invoke-rc.d yadifa restart

@@ -22,8 +22,8 @@ set -e
 case "$1" in
     purge)
 	rm -f /etc/default/yadifa
-        rm -f /var/lib/yadifa/yadifa-default.md5sum
-        rmdir /var/lib/yadifa 2>/dev/null || true 
+	rm -f /var/lib/yadifa/yadifa-default.md5sum
+	rmdir /var/lib/yadifa 2>/dev/null || true 
 
 	dpkg-statoverride --remove /var/lib/yadifa/keys >/dev/null 2>/dev/null || true
 	dpkg-statoverride --remove /var/lib/yadifa/masters >/dev/null 2>/dev/null || true
@@ -32,11 +32,11 @@ case "$1" in
 	dpkg-statoverride --remove /etc/yadifa/yadifad.conf >/dev/null 2>/dev/null || true
 	dpkg-statoverride --remove /var/log/yadifa >/dev/null 2>/dev/null || true
 
-        # delete yadifa daemon user, if it exists
-        if getent passwd yadifa > /dev/null ; then
-            echo "Deleting yadifa user"
-            deluser  --quiet yadifa > /dev/null || true
-        fi
+	# delete yadifa daemon user, if it exists
+	if getent passwd yadifa > /dev/null ; then
+	    echo "Deleting yadifa user"
+	    deluser  --quiet yadifa > /dev/null || true
+	fi
 
     ;;
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)

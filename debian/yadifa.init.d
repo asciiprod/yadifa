@@ -8,14 +8,14 @@
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Starts and stops the YADIFA name server
-# Description:	     YADIFA is a lightweight authoritative domain name server 
+# Description:	     YADIFA is a lightweight authoritative domain name server
 ### END INIT INFO
 
 # Author: Markus Schade <markus.schade@gmail.com>
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="domain name service"
-NAME=yadifa            
+NAME=yadifa
 DAEMON=/usr/sbin/yadifad
 DAEMON_ARGS=""             # Arguments to run the daemon with
 PIDFILE=/var/run/$NAME/$NAME.pid

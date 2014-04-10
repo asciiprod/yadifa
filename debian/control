@@ -14,13 +14,13 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, netbase, adduser, lsb-base
 Description: Internet Domain Name Server
  ${Description}
  .
- This package provides the server and related configuration files
+ This package provides the server and related configuration files.
 
 Package: libdnscore0
 Section: libs
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: DNS Core Shared Library used by YADIFA
+Description: DNS Core shared library used by YADIFA
  ${Description}
  .
  This package delivers the dnscore shared library used
@@ -31,7 +31,7 @@ Package: libdnsdb0
 Section: libs
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: DNS DB Shared Library used by YADIFA
+Description: DNS DB shared library used by YADIFA
  ${Description}
  .
  This package delivers the dnsdb shared library used
@@ -42,7 +42,7 @@ Package: libdnszone0
 Section: libs
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: DNS Zone Shared Library used by YADIFA
+Description: DNS Zone shared library used by YADIFA
  ${Description}
  .
  This package delivers the dnszone shared library used
@@ -52,8 +52,8 @@ Description: DNS Zone Shared Library used by YADIFA
 Package: libyadifa-dev
 Section: libdevel
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
-Description: yadifa development libraries and header files
+Depends: ${misc:Depends}, libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
+Description: development libraries and header files for YADIFA
  ${Description}
  .
  This package contains the header files and static libraries needed for
