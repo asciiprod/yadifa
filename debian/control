@@ -10,7 +10,7 @@ Vcs-Browser: https://github.com/asciiprod/yadifa.git
 
 Package: yadifa
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, netbase, adduser, lsb-base (>= 3.2-14), libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, netbase, adduser, lsb-base (>= 3.2-14)
 Description: Internet Domain Name Server
  ${Description}
  .
@@ -19,7 +19,7 @@ Description: Internet Domain Name Server
 Package: libyadifa-dev
 Section: libdevel
 Architecture: any
-Depends: ${misc:Depends}, libdnscore0 (=${binary:Version}), libdnsdb0 (=${binary:Version}), libdnszone0 (=${binary:Version})
+Depends: ${misc:Depends}
 Description: development libraries and header files for YADIFA
  ${Description}
  .
