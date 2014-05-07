@@ -1,7 +1,4 @@
 usr/include/*/*
 usr/lib/libdnscore.a
-usr/lib/libdnscore.so
 usr/lib/libdnsdb.a
-usr/lib/libdnsdb.so
 usr/lib/libdnszone.a
-usr/lib/libdnszone.so
