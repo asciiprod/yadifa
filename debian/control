@@ -16,39 +16,6 @@ Description: Internet Domain Name Server
  .
  This package provides the server and related configuration files.
 
-Package: libdnscore0
-Section: libs
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: DNS Core shared library used by YADIFA
- ${Description}
- .
- This package delivers the dnscore shared library used
- by the YADIFA daemon. It provides basic network and
- DNS query/conversion functions.
-
-Package: libdnsdb0
-Section: libs
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: DNS DB shared library used by YADIFA
- ${Description}
- .
- This package delivers the dnsdb shared library used
- by the YADIFA daemon. It handles the internal database
- and provides NSEC3 and DNSSEC capabilities.
-
-Package: libdnszone0
-Section: libs
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: DNS Zone shared library used by YADIFA
- ${Description}
- .
- This package delivers the dnszone shared library used
- by the YADIFA daemon. It handles AXFR and IXFR zone
- transfers.
-
 Package: libyadifa-dev
 Section: libdevel
 Architecture: any

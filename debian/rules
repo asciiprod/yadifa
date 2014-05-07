@@ -16,14 +16,6 @@ override_dh_clean:
 	dh_clean
 	rm -f debian/substvars
 
-override_dh_auto_configure:
-	./configure --prefix=/usr \
-		--sysconfdir=/etc/yadifa \
-                --localstatedir=/var \
-		--enable-shared \
-		--enable-static \
-		--with-gnu-ld
-
 override_dh_installinit:
 	dh_installinit -a --no-start
 
