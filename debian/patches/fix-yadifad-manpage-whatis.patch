@@ -1,21 +1,18 @@
 From: Markus Schade <markus.schade@gmail.com>
-Date: Sat, 22 Mar 2014 21:00:00 +0100
+Date: Sat, 24 Nov 2014 21:00:00 +0100
 Subject: fix lintian whatis warning in yadifad manpage
 
---- a/doc/yadifad.man	2013-06-24 14:33:46.000000000 +0200
-+++ b/doc/yadifad.man	2014-03-22 20:46:02.527713352 +0100
-@@ -10,12 +10,9 @@
- 
- .fi
+--- a/doc/yadifad.man	2014-11-24 20:50:37.378825272 +0100
++++ b/doc/yadifad.man	2014-11-24 20:51:50.202435459 +0100
+@@ -12,10 +12,7 @@
  ..
--.TH "YADIFAD" "1" "2013\-06\-24" "YADIFA " "YADIFA "
-+.TH "YADIFAD" "8" "2013\-06\-24" "YADIFA " "YADIFA "
+ .TH "YADIFAD" "8" "2014\-07\-02" "YADIFA " "YADIFA "
  .SH NAME
 -
 -.PP
 -YADIFAD
 -is an authoritative name server. 
-+yadifad \- authoritative Internet domain name server
++yadifad \- an authoritative Internet domain name server. 
  .PP
  .SH SYNOPSIS
  

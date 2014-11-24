@@ -10,7 +10,7 @@ DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/buildflags.mk
 
 %:
-	dh $@  --with autotools-dev
+	dh $@  --with autotools-dev --enable-rrl
 
 override_dh_clean:
 	dh_clean

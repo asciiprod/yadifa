@@ -1,14 +1,13 @@
 From: Markus Schade <markus.schade@gmail.com>
-Date: Sat, 22 Mar 2014 21:00:00 +0100
+Date: Sat, 24 Nov 2014 21:00:00 +0100
 Subject: fix lintian whatis warning and FHS in yadifad.conf manpage
 
---- a/doc/yadifad.conf.man	2013-06-24 14:33:46.000000000 +0200
-+++ b/doc/yadifad.conf.man	2014-03-22 20:56:34.741955530 +0100
-@@ -12,15 +12,12 @@
- ..
- .TH "YADIFAD\-CONF" "5" "2013\-06\-24" "YADIFA " "YADIFA "
+--- a/doc/yadifad.conf.man	2014-11-24 20:34:22.860006654 +0100
++++ b/doc/yadifad.conf.man	2014-11-24 20:42:35.417403464 +0100
+@@ -13,14 +13,12 @@
+ .TH "YADIFAD\-CONF" "5" "2014\-07\-02" "YADIFA " "YADIFA "
  .SH NAME
--
+
 -.PP
 -yadifad.conf
 -is the configuration file for \fIyadifad\fP(1)\&.
@@ -22,7 +21,7 @@ Subject: fix lintian whatis warning and FHS in yadifad.conf manpage
  .PP
  .SH DESCRIPTION
  
-@@ -48,7 +45,7 @@
+@@ -48,7 +46,7 @@
  .PP
  The configuration supports included files.
  .br
@@ -31,25 +30,25 @@ Subject: fix lintian whatis warning and FHS in yadifad.conf manpage
  .PP
  The configuration files can be nested. 
  .PP
-@@ -95,7 +92,7 @@
+@@ -95,7 +93,7 @@
  .PP
  .Vb
  # start yadifad.conf <main> container
--        include /usr/local/etc/yadifad\-main.conf
+-        include /usr/local\-dev/etc/yadifad\-main.conf
 +        include /etc/yadifa/yadifad\-main.conf
  # end yadifad.conf <main> container
  .Ve
  .PP
-@@ -112,24 +109,24 @@
+@@ -112,24 +110,24 @@
          chroot                  off
  
          # The path of the log files
 -        logpath                 "/usr/local/var/log"
 +        logpath                 "/var/log/yadifa"
  
-         # The path of the pid file
--        pidpath                 "/usr/local/var/run"    
-+        pidpath                 "/var/run"    
+         # The location of the pid file
+-        pidfile                 "/usr/local/var/run/yadifad.pid"
++        pidfile                 "/run/yadifad.pid"
  
          # The path of the zone files
 -        datapath                "/usr/local/var/zones"
@@ -65,7 +64,7 @@ Subject: fix lintian whatis warning and FHS in yadifad.conf manpage
  
          # The version returned by a query to version.yadifa. CH TXT
 -        version                 "1.0.0rc2"
-+        version                 "1.0.3"
++        version                 "2.0.0"
  
 -        # Enable EDNS0 support (?)
 +        # Enable EDNS0 support (option not supported)
