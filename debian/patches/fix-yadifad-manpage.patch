@@ -16,7 +16,7 @@ Subject: fix lintian warnings in yadifad manpage
  .PP
  .SH SYNOPSIS
  
-@@ -65,214 +62,80 @@
+@@ -65,214 +62,83 @@
  yadifad
  works only with 1 CLASS:
  .PP
@@ -213,16 +213,18 @@ Subject: fix lintian warnings in yadifad manpage
 -4255
 -T}
 -T{
--TXT 
++.TP
++18.
++TLSA 
++.TP
++19.
+ TXT 
 -T}&T{
 -16 
 -T}&T{
 -1035
 -T}
 -.TE
-+.TP
-+18.
-+TXT. 
  .PP
  .br
  Other tyes and pseudo resource records: 
