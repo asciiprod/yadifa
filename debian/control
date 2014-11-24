@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: Markus Schade <markus.schade@gmail.com>
 Build-Depends: debhelper (>= 8), dpkg-dev (>= 1.16.1~), autotools-dev, libssl-dev, dh-systemd
-Standards-Version: 3.9.5
+Standards-Version: 3.9.6
 Homepage: http://www.yadifa.eu
 Vcs-Git: git://github.com/asciiprod/yadifa.git
 Vcs-Browser: https://github.com/asciiprod/yadifa.git
