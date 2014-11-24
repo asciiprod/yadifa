@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 2880 $])
+AC_REVISION([$Revision: 4183 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -45,7 +45,7 @@ AC_REVISION([$Revision: 2880 $])
 # grep -r \$Revision: ../../* |sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//'|sort -n|tail -1| tr -d '\n')|tr -d '\n'
 
 
-AC_INIT([yadifa],m4_esyscmd([echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
+AC_INIT([yadifa],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 m4_include([../../m4/eurid.m4])
 m4_include([../../m4/yadifa.m4])
@@ -116,6 +116,7 @@ AC_CPU_CHECK
 AC_COMPILER_CHECK
 AC_MEMALIGN_CHECK
 AC_PTHREAD_SPINLOCK_CHECK
+AC_PTHREAD_SETNAME_NP_CHECK
 
 AC_YADIFA_FEATURES
 
@@ -151,14 +152,6 @@ echo
 echo
 echo "Features used:"
 echo "--------------"
-case "$enable_tcl" in
-	yes)
-	echo "TCL ................................. : enabled"
-	echo "TCLVERSION .......................... : ${TCLVERSION}"
-	;;
-	*)
-	;;
-esac
 
 if [[ ! "${OPENSSL}" = "" ]]
 then
@@ -178,4 +171,6 @@ echo "Install prefix ...................... : $prefix"
 echo "Install sysconf ..................... : $sysconfdir"
 echo
 echo
+
+AC_MAKE_BUILDINFO
 
