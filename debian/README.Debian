@@ -4,6 +4,8 @@ YADIFA for Debian
 Changes from upstream
 * changed dir for zone files from /var/zones to /var/lib/yadifa
 * added unprivileged yadifa user and run as it instead of root
-* built with shared-libs instead of statically linked
+
+2.0.0
+* with rate limiting and remote control
 
  -- Markus Schade <markus.schade@gmail.com>

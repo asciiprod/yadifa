@@ -1,4 +1,5 @@
 etc/yadifa
+usr/bin
 usr/sbin
 var/lib/yadifa
 var/lib/yadifa/keys

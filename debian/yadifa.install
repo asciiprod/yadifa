@@ -1,4 +1,5 @@
 /debian/yadifad.conf /etc/yadifa/
+usr/bin/yadifa
 usr/sbin/yadifad
 /var/zones/masters/0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.zone /var/lib/yadifa/masters/
 /var/zones/masters/0.0.127.in-addr.arpa.zone /var/lib/yadifa/masters/
