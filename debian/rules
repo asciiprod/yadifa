@@ -10,11 +10,14 @@ DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/buildflags.mk
 
 %:
-	dh $@  --with autotools-dev --enable-rrl --enable-nsid --with-tools --enable-ctrl
+	dh $@  --with autotools-dev
 
 override_dh_clean:
 	dh_clean
 	rm -f debian/substvars
+
+override_dh_auto_configure:
+	dh_auto_configure -- --enable-rrl --enable-nsid --with-tools --enable-ctrl
 
 override_dh_installinit:
 	dh_installinit -a --no-start
