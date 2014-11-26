@@ -1,5 +1,5 @@
 usr/include/*/*
-usr/lib/libdnscore.a
-usr/lib/libdnsdb.a
-usr/lib/libdnslg.a
-usr/lib/libdnszone.a
+usr/lib/*/libdnscore.a
+usr/lib/*/libdnsdb.a
+usr/lib/*/libdnslg.a
+usr/lib/*/libdnszone.a
