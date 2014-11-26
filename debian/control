@@ -2,7 +2,12 @@ Source: yadifa
 Section: net
 Priority: optional
 Maintainer: Markus Schade <markus.schade@gmail.com>
-Build-Depends: debhelper (>= 8), dpkg-dev (>= 1.16.1~), autotools-dev, libssl-dev, dh-systemd
+Build-Depends:
+ autotools-dev,
+ debhelper (>= 8),
+ dh-systemd,
+ dpkg-dev (>= 1.16.1~),
+ libssl-dev
 Standards-Version: 3.9.6
 Homepage: http://www.yadifa.eu
 Vcs-Git: git://github.com/asciiprod/yadifa.git
@@ -10,7 +15,13 @@ Vcs-Browser: https://github.com/asciiprod/yadifa.git
 
 Package: yadifa
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, netbase, adduser, lsb-base (>= 3.2-14)
+Depends:
+ adduser,
+ debconf,
+ lsb-base,
+ netbase,
+ ${misc:Depends},
+ ${shlibs:Depends}
 Description: Internet Domain Name Server
  ${Description}
  .
@@ -19,10 +30,10 @@ Description: Internet Domain Name Server
 Package: libyadifa-dev
 Section: libdevel
 Architecture: any
-Depends: ${misc:Depends}
+Depends:
+ ${misc:Depends}
 Description: development libraries and header files for YADIFA
  ${Description}
  .
  This package contains the header files and static libraries needed for
  developing applications for YADIFA.
-
