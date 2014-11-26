@@ -43,6 +43,9 @@ case "$1" in
 	    md5sum /etc/default/yadifa > /var/lib/yadifa/yadifa-default.md5sum
 	fi
 
+	# Make /var/lib/yadifa dirs writeable by yadifa:yadifa user
+	dpkg-statoverride --list /var/lib/yadifa >/dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa
+
 	dpkg-statoverride --list /var/lib/yadifa/keys > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/keys
 	dpkg-statoverride --list /var/lib/yadifa/masters > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/masters
 	dpkg-statoverride --list /var/lib/yadifa/slaves > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/slaves
