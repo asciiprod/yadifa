@@ -1,2 +1,2 @@
-# upstream does not provide a gpg key
+# upstream does not sign releases
 yadifa source: debian-watch-may-check-gpg-signature
