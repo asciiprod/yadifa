@@ -1,19 +1,19 @@
 # vim:syntax=apparmor
 # AppArmor policy for yadifad
 
-#include <tunables/global>
-
 # No template variables specified
 
 #include <tunables/global>
 /usr/sbin/yadifad {
   #include <abstractions/base>
   #include <abstractions/nameservice>
+  #include <abstractions/consoles>
 
   capability dac_override,
   capability chown,
   capability setuid,
   capability setgid,
+  capability kill,
 
   /etc/yadifa/** r,
 
