@@ -7,6 +7,7 @@
 /usr/sbin/yadifad {
   #include <abstractions/base>
   #include <abstractions/nameservice>
+  #include <abstractions/consoles>
 
   capability dac_override,
   capability chown,
