@@ -21,10 +21,9 @@ set -e
 case "$1" in
     configure)
 	# lets give them a yadifa user/group in all cases.
-	getent group yadifa >/dev/null 2>&1 || addgroup --system yadifa
-	getent passwd yadifa >/dev/null 2>&1 ||
-		adduser --system --home /var/lib/yadifa --no-create-home \
-			--disabled-password --ingroup yadifa yadifa
+	if ! getent passwd yadifa >/dev/null; then 
+		adduser --quiet --system --group --home /var/lib/yadifa --no-create-home yadifa
+	fi
 
 	# no sumfile means you get the default
 	[ -f /var/lib/yadifa/yadifa-default.md5sum ] ||
@@ -51,13 +50,13 @@ case "$1" in
 	dpkg-statoverride --list /var/lib/yadifa/slaves > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/slaves
 	dpkg-statoverride --list /var/lib/yadifa/xfr > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/lib/yadifa/xfr
 	dpkg-statoverride --list /var/log/yadifa > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0755 /var/log/yadifa
-	dpkg-statoverride --list /etc/yadifa/yadifad.conf > /dev/null || dpkg-statoverride --update --add yadifa yadifa 0640 /etc/yadifa/yadifad.conf
 
-	if pidof /usr/sbin/yadifad >/dev/null 2>&1; then
-	    invoke-rc.d yadifa restart
-	else
-	    invoke-rc.d yadifa start
-	fi
+# should not be needed anymore
+#	if pidof /usr/sbin/yadifad >/dev/null 2>&1; then
+#	    invoke-rc.d yadifa restart
+#	else
+#	    invoke-rc.d yadifa start
+#	fi
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
