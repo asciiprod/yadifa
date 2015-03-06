@@ -13,6 +13,7 @@
   capability chown,
   capability setuid,
   capability setgid,
+  capability kill,
 
   /etc/yadifa/** r,
 
