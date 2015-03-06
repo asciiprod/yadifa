@@ -3,11 +3,12 @@ Section: net
 Priority: optional
 Maintainer: Markus Schade <markus.schade@gmail.com>
 Build-Depends:
- autotools-dev,
+ dh-autoreconf,
  debhelper (>= 9),
  dh-systemd,
  dpkg-dev (>= 1.16.1~),
- libssl-dev
+ libssl-dev,
+ dh-apparmor
 Standards-Version: 3.9.6
 Homepage: http://www.yadifa.eu
 Vcs-Git: git://github.com/asciiprod/yadifa.git
@@ -22,6 +23,8 @@ Depends:
  netbase,
  ${misc:Depends},
  ${shlibs:Depends}
+Suggests:
+ apparmor
 Description: Internet Domain Name Server
  ${Description}
  .
