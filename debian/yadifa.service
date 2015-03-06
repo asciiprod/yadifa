@@ -4,7 +4,7 @@ Documentation=man:yadifa(8)
 After=network.target
 
 [Service]
-ExecStart=/usr/sbin/yadifad -c /etc/yadifa/yadifad.conf
+ExecStart=/usr/sbin/yadifad -c /etc/yadifa/yadifad.conf --nodaemon
 
 [Install]
 WantedBy=multi-user.target
