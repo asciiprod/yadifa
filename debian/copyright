@@ -31,7 +31,9 @@ License: BSD-3-clause
  POSSIBILITY OF SUCH DAMAGE.
 
 Files: debian/*
-Copyright: 2014, Markus Schade <markus.schade@gmail.com>
+Copyright: 
+  2014-2015, Markus Schade <markus.schade@gmail.com>
+  2015, Terry Burton <tez@terryburton.co.uk>
 License: BSD-2-clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
