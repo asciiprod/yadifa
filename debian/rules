@@ -7,7 +7,7 @@
 export DH_OPTIONS
 
 %:
-	dh $@  --with autotools-dev
+	dh $@  --with autoreconf
 
 override_dh_clean:
 	dh_clean
@@ -15,6 +15,10 @@ override_dh_clean:
 
 override_dh_auto_configure:
 	dh_auto_configure -- --enable-rrl --enable-nsid --with-tools --enable-ctrl
+
+override_dh_install:
+	dh_install
+	dh_apparmor --profile-name=usr.sbin.yadifad -pyadifa
 
 override_dh_installinit:
 	dh_installinit -a --no-start
