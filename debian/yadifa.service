@@ -4,7 +4,11 @@ Documentation=man:yadifa(8)
 After=network.target
 
 [Service]
+Type=simple
+PIDFile=/var/run/yadifa/yadifad.pid
 ExecStart=/usr/sbin/yadifad -c /etc/yadifa/yadifad.conf --nodaemon
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target
