@@ -23,7 +23,7 @@ set -e
 
 #DEBHELPER#
 
-if test "$1" = "purge"; then
+if [ "$1" = "purge" ]; then
 	rm -f /etc/default/yadifa
 	rm -f /var/lib/yadifa/yadifa-default.md5sum
 	rmdir /var/lib/yadifa 2>/dev/null || true 
