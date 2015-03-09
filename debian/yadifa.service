@@ -4,9 +4,9 @@ Documentation=man:yadifa(8)
 After=network.target
 
 [Service]
-Type=simple
+Type=forking
 PIDFile=/var/run/yadifa/yadifad.pid
-ExecStart=/usr/sbin/yadifad -c /etc/yadifa/yadifad.conf --nodaemon
+ExecStart=/usr/sbin/yadifad -c /etc/yadifa/yadifad.conf
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 
