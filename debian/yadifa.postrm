@@ -29,7 +29,6 @@ case "$1" in
 	dpkg-statoverride --remove /var/lib/yadifa/masters >/dev/null 2>/dev/null || true
 	dpkg-statoverride --remove /var/lib/yadifa/slaves >/dev/null 2>/dev/null || true
 	dpkg-statoverride --remove /var/lib/yadifa/xfr >/dev/null 2>/dev/null || true
-	dpkg-statoverride --remove /etc/yadifa/yadifad.conf >/dev/null 2>/dev/null || true
 	dpkg-statoverride --remove /var/log/yadifa >/dev/null 2>/dev/null || true
 
 	# delete yadifa daemon user, if it exists
