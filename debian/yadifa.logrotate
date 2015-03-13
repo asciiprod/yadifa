@@ -1,0 +1,12 @@
+/var/log/yadifa/*log {
+    daily
+    rotate 10
+    compress
+    delaycompress
+    missingok
+    notifempty
+    sharedscripts
+    postrotate
+            service yadifad reload > /dev/null 2>&1 || true
+    endscript
+}
