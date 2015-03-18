@@ -36,4 +36,5 @@ Description: development libraries and header files for YADIFA
  ${Description}
  .
  This package contains the header files and static libraries needed for
- developing applications for YADIFA.
+ developing applications for YADIFA. It is currently only used by YADIFA
+ itself and should not be considered stable.
