@@ -1,6 +1,12 @@
-yadifa (2.0.6-1) unstable; urgency=low
+yadifa (2.1.0-1) unstable; urgency=low
 
   * Initial release (Closes: #682716)
+
+ -- Markus Schade <markus.schade@gmail.com>  Tue, 05 May 2015 13:26:13 +0200
+
+yadifa (2.0.6-1) unstable; urgency=low
+
+  * new upstream release (not included in Debian)
 
  -- Markus Schade <markus.schade@gmail.com>  Tue, 21 Apr 2015 08:06:09 +0200
 
