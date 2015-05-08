@@ -2,14 +2,12 @@ From: Markus Schade <markus.schade@gmail.com>
 Date: Sat, 24 Nov 2014 21:00:00 +0100
 Subject: fix lintian whatis warning in yadifa manpage
 
---- a/doc/yadifa.man	2014-11-24 20:50:37.378825272 +0100
-+++ b/doc/yadifa.man	2014-11-24 20:51:50.202435459 +0100
-@@ -12,10 +12,7 @@
- ..
- .TH "YADIFA" "8" "2014\-07\-01" "YADIFA " "YADIFA "
+--- a/doc/yadifa.man	2015-05-08 10:05:25.601314701 +0200
++++ b/doc/yadifa.man	2015-05-08 10:06:37.920878365 +0200
+@@ -14,8 +14,7 @@
  .SH NAME
--
--.PP
+ 
+ .PP
 -YADIFA
 -is an utility for controlling YADIFAD 
 +yadifa \- utility for controlling \fIyadifad\fP(8)\&
