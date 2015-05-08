@@ -1,0 +1,15 @@
+From: Markus Schade <markus.schade@gmail.com>
+Date: Fri, 08 Mai 2015 09:00:00 +0200
+Subject: fix lintian spelling warning in yadifad binary
+
+--- a/sbin/yadifad/database-service-zone-resignature.c	2015-05-08 09:49:28.679060420 +0200
++++ b/sbin/yadifad/database-service-zone-resignature.c	2015-05-08 09:49:45.382959715 +0200
+@@ -416,7 +416,7 @@
+     
+     if(!zone_maintains_dnssec(zone_desc))
+     {
+-        log_warn("zone sign: %{dnsname} resignature triggered although the feature was explicitely disabled : ignoring request.", zone_desc->origin);
++        log_warn("zone sign: %{dnsname} resignature triggered although the feature was explicitly disabled : ignoring request.", zone_desc->origin);
+         
+         zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE);
+         
