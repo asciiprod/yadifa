@@ -4,14 +4,13 @@ Subject: fix lintian whatis warning
 
 --- a/doc/yadifad.conf.man	2014-11-24 20:34:22.860006654 +0100
 +++ b/doc/yadifad.conf.man	2014-11-24 20:42:35.417403464 +0100
-@@ -13,14 +13,12 @@
- .TH "YADIFAD\-CONF" "5" "2014\-07\-02" "YADIFA " "YADIFA "
+@@ -14,8 +14,7 @@
  .SH NAME
-
--.PP
+ 
+ .PP
 -yadifad.conf
--is the configuration file for \fIyadifad\fP(1)\&.
-+yadifad.conf \- configuration file for \fIyadifad\fP(8)\&.
+-is the configuration file for \fIyadifad\fP(8)\&.
++yadifad.conf \- is the configuration file for \fIyadifad\fP(8)\&.
  .PP
  .SH SYNOPSIS
  
