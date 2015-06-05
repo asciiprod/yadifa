@@ -2,8 +2,6 @@ From: Markus Schade <markus.schade@gmail.com>
 Date: Fri, 05 Jun 2015 10:40:00 +0200
 Subject: fix spelling, paths and lintian whatis warning
 
-diff --git a/doc/yadifad.conf.man b/doc/yadifad.conf.man
-index 8e4b5e2..f27c1ca 100644
 --- a/doc/yadifad.conf.man
 +++ b/doc/yadifad.conf.man
 @@ -14,13 +14,12 @@

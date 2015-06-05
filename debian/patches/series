@@ -3,3 +3,4 @@ fix-yadifa-manpage.patch
 #fix-yadifad.conf-manpage-whatis.patch
 fix-yadifad.conf.patch
 fix-yadifad-spelling.patch
+fix-yadifarc-manpage.patch

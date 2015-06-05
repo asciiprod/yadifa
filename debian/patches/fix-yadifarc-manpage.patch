@@ -1,0 +1,16 @@
+From: Markus Schade <markus.schade@gmail.com>
+Date: Fri, 05 Jun 2015 10:40:00 +0200
+Subject: fix lintian whatis warning
+
+--- a/doc/yadifa.rc.man
++++ b/doc/yadifa.rc.man
+@@ -14,8 +14,7 @@
+ .SH NAME
+ 
+ .PP
+-yadifa.rc
+-is the configuration file for \fIyadifa\fP(8)\&.
++yadifa.rc \- is the configuration file for \fIyadifa\fP(8)\&.
+ .PP
+ .SH SYNOPSIS
+ 
