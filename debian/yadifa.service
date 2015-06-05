@@ -4,7 +4,7 @@ Documentation=man:yadifa(8)
 After=network.target
 
 [Service]
-Type=forking
+Type=simple
 PIDFile=/var/run/yadifa/yadifad.pid
 ExecStart=/usr/sbin/yadifad -c /etc/yadifa/yadifad.conf
 ExecReload=/bin/kill -HUP $MAINPID
