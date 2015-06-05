@@ -1,4 +1,5 @@
 fix-yadifa-manpage.patch
 #fix-yadifad-manpage.patch
-fix-yadifad.conf-manpage-whatis.patch
+#fix-yadifad.conf-manpage-whatis.patch
+fix-yadifad.conf.patch
 fix-yadifad-spelling.patch
