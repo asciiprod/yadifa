@@ -1,7 +1,7 @@
 # Compulsory line, this is a version 3 file
 version=3
 
-opts="uversionmangle=s/\.+\d{4}$//" \
+opts="uversionmangle=s/\.+\d{4}$//,pgpsigurlmangle=s/releases\/(.+)$/$1.asc/" \
 http://www.yadifa.eu/download http://cdn.yadifa.eu/sites/default/files/releases/yadifa-([\d\.]+)\-([\d]+)\.(?:tgz|tar\.gz)
 
 
