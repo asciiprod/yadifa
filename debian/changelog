@@ -1,5 +1,11 @@
 yadifa (2.1.2-1) unstable; urgency=low
 
+  * New upstream version
+
+ --  Markus Schade <markus.schade@gmail.com>  Tue, 18 Aug 2015 15:13:04 +0200
+
+yadifa (2.1.1-1) unstable; urgency=low
+
   * Initial release (Closes: #682716)
 
  -- Markus Schade <markus.schade@gmail.com>  Sun, 16 Aug 2015 15:54:44 +0200

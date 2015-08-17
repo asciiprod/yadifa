@@ -7,7 +7,7 @@ After=network.target
 Type=simple
 EnvironmentFile=-/etc/default/yadifa
 PIDFile=/var/run/yadifa/yadifad.pid
-ExecStart=/usr/sbin/yadifad -c $CONFIG_FILE
+ExecStart=/usr/sbin/yadifad -c $YADIFA_CONF
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 

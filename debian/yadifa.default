@@ -6,7 +6,7 @@
 # This is a POSIX shell fragment
 #
 
-CONFIG_FILE="/etc/yadifad.conf"
+YADIFA_CONF="/etc/yadifa/yadifad.conf"
 
 # Additional options that are passed to the Daemon.
 DAEMON_ARGS="-d -c $CONFIG_FILE"
