@@ -26,7 +26,7 @@ if [ "$1" = configure ]; then
 
 	# no sumfile means you get the default
 	[ -f /var/lib/yadifa/yadifa-default.md5sum ] ||
-	   echo "37bc6cb6782f8ec0e0eb0301880d65a4  /etc/default/yadifa" > /var/lib/yadifa/yadifa-default.md5sum
+	   echo "6c3c952227a3f370f2f905fc2f821c15 /etc/default/yadifa" > /var/lib/yadifa/yadifa-default.md5sum
 
 	if [ -e /etc/default/yadifa ] && \
 	   [ "$(cat /var/lib/yadifa/yadifa-default.md5sum)" = "$(md5sum /etc/default/yadifa)" ]; then
