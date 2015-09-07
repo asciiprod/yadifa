@@ -3,12 +3,10 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-#DEB_CONFIGURE_EXTRA_FLAGS :=     \
-#	--enable-rrl	\
-#	--enable-nsid	\
-#	--enable-tools	\
-#	--enable-ctrl	\
-#	--enable-ctrl-dynamic-provisioning
+DEB_BUILD_MAINT_OPTIONS = hardening=+all,-pie
+DEB_CFLAGS_MAINT_APPEND = -Wall -Wextra
+DPKG_EXPORT_BUILDFLAGS = 1
+-include /usr/share/dpkg/buildflags.mk
 
 %:
 	dh $@  --with autoreconf --with=systemd
@@ -22,8 +20,7 @@ override_dh_auto_configure:
 		--enable-rrl	\
 		--enable-nsid	\
 		--enable-tools	\
-		--enable-ctrl	\
-		--enable-ctrl-dynamic-provisioning
+		--enable-ctrl
 
 override_dh_installinit:
 	dh_installinit -a --no-start
