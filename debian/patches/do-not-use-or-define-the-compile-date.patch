@@ -1,0 +1,53 @@
+From: Santiago Vila <sanvila@debian.org>
+Subject: Do not use or define COMPILEDATE, it makes the build not to be reproducible
+
+--- yadifa-2.1.3.orig/bin/yadifa/common-config.h
++++ yadifa-2.1.3/bin/yadifa/common-config.h
+@@ -38,7 +38,6 @@
+ #define     PROGRAM_NAME                            PACKAGE
+ #define     PROGRAM_VERSION                         PACKAGE_VERSION
+ #define     RELEASEDATE                             "2015-09-07"
+-#define     COMPILEDATE                             __DATE__
+ 
+ #define     ROUND_ROBIN                             0x00
+ 
+--- yadifa-2.1.3.orig/bin/yadifa/yadifa-config.c
++++ yadifa-2.1.3/bin/yadifa/yadifa-config.c
+@@ -350,10 +350,10 @@ yadifa_print_version(int level)
+             osformatln(termout, "%s %s (%s)", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+             break;
+         case 2:
+-            osformatln(termout, "%s %s (released %s, compiled %s)", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE);
++            osformatln(termout, "%s %s (released %s)", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+             break;
+         case 3:
+-            osformatln(termout, "%s %s (released %s, compiled %s)", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE);
++            osformatln(termout, "%s %s (released %s)", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+             yadifa_print_authors();
+             break;
+         default:
+--- yadifa-2.1.3.orig/sbin/yadifad/confs.c
++++ yadifa-2.1.3/sbin/yadifad/confs.c
+@@ -228,10 +228,10 @@ yadifad_show_version(u8 level)
+ 	    osformatln(termout, "%s %s (%s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+ 	    break;
+ 	case 2:
+-	    osformatln(termout, "%s %s (released %s, compiled %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE, BUILD_OPTIONS);
++	    osformatln(termout, "%s %s (released %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, BUILD_OPTIONS);
+ 	    break;
+         case 3:
+-	    osformatln(termout, "%s %s (released %s, compiled %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE);
++	    osformatln(termout, "%s %s (released %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+             yadifad_print_authors();
+             break;
+ 	default:
+--- yadifa-2.1.3.orig/sbin/yadifad/confs.h
++++ yadifa-2.1.3/sbin/yadifad/confs.h
+@@ -84,7 +84,6 @@ extern "C" {
+ #define     PROGRAM_NAME                PACKAGE
+ #define     PROGRAM_VERSION             PACKAGE_VERSION
+ #define     RELEASEDATE                 "2015-09-07"
+-#define     COMPILEDATE                 __DATE__
+ 
+     /* List of default values for the different configuration parameters */
+ #define     S_CONFIGDIR                 SYSCONFDIR "/"

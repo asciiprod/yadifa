@@ -1,3 +1,11 @@
+yadifa (2.1.3-2) unstable; urgency=low
+
+  * Add debian/patches/do-not-use-or-define-the-compile-date.patch
+    to make the build reproducible. Courtesy of Santiago Vila
+    (Closes: #798450)
+
+ -- Markus Schade <markus.schade@gmail.com>  Wed, 09 Sep 2015 15:12:24 +0200
+
 yadifa (2.1.3-1) unstable; urgency=low
 
   * New upstream version 2.1.3
