@@ -59,3 +59,51 @@ index 36872cb..3cf8979 100644
  
      /* List of default values for the different configuration parameters */
  #define     S_CONFIGDIR                 SYSCONFDIR "/"
+Index: yadifa-2.1.4/lib/dnscore/src/dnscore.c
+===================================================================
+--- yadifa-2.1.4.orig/lib/dnscore/src/dnscore.c
++++ yadifa-2.1.4/lib/dnscore/src/dnscore.c
+@@ -103,9 +103,9 @@
+ #endif
+ 
+ #ifdef DEBUG
+-const char *dnscore_lib = "dnscore " __DATE__ " " __TIME__ " debug";
++const char *dnscore_lib = "dnscore debug";
+ #else
+-const char *dnscore_lib = "dnscore " __DATE__ " " __TIME__ " release";
++const char *dnscore_lib = "dnscore release";
+ #endif
+ 
+ static const char* ARCH_RECOMPILE_WARNING = "Please recompile with the correct settings.";
+Index: yadifa-2.1.4/lib/dnsdb/src/zdb.c
+===================================================================
+--- yadifa-2.1.4.orig/lib/dnsdb/src/zdb.c
++++ yadifa-2.1.4/lib/dnsdb/src/zdb.c
+@@ -91,9 +91,9 @@ extern logger_handle* g_database_logger;
+ #endif
+ 
+ #ifdef DEBUG
+-const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " debug";
++const char *dnsdb_lib = "dnsdb debug";
+ #else
+-const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " release";
++const char *dnsdb_lib = "dnsdb release";
+ #endif
+ 
+ static pthread_mutex_t *ssl_mutex = NULL;
+Index: yadifa-2.1.4/lib/dnszone/src/dnszone.c
+===================================================================
+--- yadifa-2.1.4.orig/lib/dnszone/src/dnszone.c
++++ yadifa-2.1.4/lib/dnszone/src/dnszone.c
+@@ -62,9 +62,9 @@
+ #endif
+ 
+ #ifdef DEBUG
+-const char *dnszone_lib = "dnszone " __DATE__ " " __TIME__ " debug";
++const char *dnszone_lib = "dnszone debug";
+ #else
+-const char *dnszone_lib = "dnszone " __DATE__ " " __TIME__ " release";
++const char *dnszone_lib = "dnszone release";
+ #endif
+ 
+ dnslib_fingerprint
