@@ -1,23 +1,19 @@
 From: Santiago Vila <sanvila@debian.org>
 Subject: Do not use or define COMPILEDATE, it makes the build not to be reproducible
 
-diff --git a/bin/yadifa/common-config.h b/bin/yadifa/common-config.h
-index 5fd9b29..9c82bdc 100644
 --- a/bin/yadifa/common-config.h
 +++ b/bin/yadifa/common-config.h
 @@ -38,7 +38,6 @@
  #define     PROGRAM_NAME                            PACKAGE
  #define     PROGRAM_VERSION                         PACKAGE_VERSION
- #define     RELEASEDATE                             "2015-10-16"
+ #define     RELEASEDATE                             "2016-02-04"
 -#define     COMPILEDATE                             __DATE__
  
  #define     ROUND_ROBIN                             0x00
  
-diff --git a/bin/yadifa/yadifa-config.c b/bin/yadifa/yadifa-config.c
-index d1207df..7f38283 100644
 --- a/bin/yadifa/yadifa-config.c
 +++ b/bin/yadifa/yadifa-config.c
-@@ -350,10 +350,10 @@ yadifa_print_version(int level)
+@@ -351,10 +351,10 @@
              osformatln(termout, "%s %s (%s)", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
              break;
          case 2:
@@ -30,39 +26,8 @@ index d1207df..7f38283 100644
              yadifa_print_authors();
              break;
          default:
-diff --git a/sbin/yadifad/confs.c b/sbin/yadifad/confs.c
-index 5f784ec..72a16bd 100644
---- a/sbin/yadifad/confs.c
-+++ b/sbin/yadifad/confs.c
-@@ -227,10 +227,10 @@ yadifad_show_version(u8 level)
- 	    osformatln(termout, "%s %s (%s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
- 	    break;
- 	case 2:
--	    osformatln(termout, "%s %s (released %s, compiled %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE, BUILD_OPTIONS);
-+	    osformatln(termout, "%s %s (released %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, BUILD_OPTIONS);
- 	    break;
-         case 3:
--	    osformatln(termout, "%s %s (released %s, compiled %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE);
-+	    osformatln(termout, "%s %s (released %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
-             yadifad_print_authors();
-             break;
- 	default:
-diff --git a/sbin/yadifad/confs.h b/sbin/yadifad/confs.h
-index 36872cb..3cf8979 100644
---- a/sbin/yadifad/confs.h
-+++ b/sbin/yadifad/confs.h
-@@ -84,7 +84,6 @@ extern "C" {
- #define     PROGRAM_NAME                PACKAGE
- #define     PROGRAM_VERSION             PACKAGE_VERSION
- #define     RELEASEDATE                 "2015-10-16"
--#define     COMPILEDATE                 __DATE__
- 
-     /* List of default values for the different configuration parameters */
- #define     S_CONFIGDIR                 SYSCONFDIR "/"
-Index: yadifa-2.1.4/lib/dnscore/src/dnscore.c
-===================================================================
---- yadifa-2.1.4.orig/lib/dnscore/src/dnscore.c
-+++ yadifa-2.1.4/lib/dnscore/src/dnscore.c
+--- a/lib/dnscore/src/dnscore.c
++++ b/lib/dnscore/src/dnscore.c
 @@ -103,9 +103,9 @@
  #endif
  
@@ -75,11 +40,9 @@ Index: yadifa-2.1.4/lib/dnscore/src/dnscore.c
  #endif
  
  static const char* ARCH_RECOMPILE_WARNING = "Please recompile with the correct settings.";
-Index: yadifa-2.1.4/lib/dnsdb/src/zdb.c
-===================================================================
---- yadifa-2.1.4.orig/lib/dnsdb/src/zdb.c
-+++ yadifa-2.1.4/lib/dnsdb/src/zdb.c
-@@ -91,9 +91,9 @@ extern logger_handle* g_database_logger;
+--- a/lib/dnsdb/src/zdb.c
++++ b/lib/dnsdb/src/zdb.c
+@@ -92,9 +92,9 @@
  #endif
  
  #ifdef DEBUG
@@ -91,11 +54,9 @@ Index: yadifa-2.1.4/lib/dnsdb/src/zdb.c
  #endif
  
  static pthread_mutex_t *ssl_mutex = NULL;
-Index: yadifa-2.1.4/lib/dnszone/src/dnszone.c
-===================================================================
---- yadifa-2.1.4.orig/lib/dnszone/src/dnszone.c
-+++ yadifa-2.1.4/lib/dnszone/src/dnszone.c
-@@ -62,9 +62,9 @@
+--- a/lib/dnszone/src/dnszone.c
++++ b/lib/dnszone/src/dnszone.c
+@@ -64,9 +64,9 @@
  #endif
  
  #ifdef DEBUG
@@ -107,3 +68,28 @@ Index: yadifa-2.1.4/lib/dnszone/src/dnszone.c
  #endif
  
  dnslib_fingerprint
+--- a/sbin/yadifad/confs.c
++++ b/sbin/yadifad/confs.c
+@@ -228,10 +228,10 @@
+ 	    osformatln(termout, "%s %s (%s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+ 	    break;
+ 	case 2:
+-	    osformatln(termout, "%s %s (released %s, compiled %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE, BUILD_OPTIONS);
++	    osformatln(termout, "%s %s (released %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, BUILD_OPTIONS);
+ 	    break;
+         case 3:
+-	    osformatln(termout, "%s %s (released %s, compiled %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE);
++	    osformatln(termout, "%s %s (released %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+             yadifad_print_authors();
+             break;
+ 	default:
+--- a/sbin/yadifad/confs.h
++++ b/sbin/yadifad/confs.h
+@@ -84,7 +84,6 @@
+ #define     PROGRAM_NAME                PACKAGE
+ #define     PROGRAM_VERSION             PACKAGE_VERSION
+ #define     RELEASEDATE                 "2016-02-04"
+-#define     COMPILEDATE                 __DATE__
+ 
+     /* List of default values for the different configuration parameters */
+ #define     S_CONFIGDIR                 SYSCONFDIR "/"

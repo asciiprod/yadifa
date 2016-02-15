@@ -4,7 +4,7 @@ Subject: fix spelling, paths and lintian whatis warning
 
 --- a/doc/yadifad.conf.man
 +++ b/doc/yadifad.conf.man
-@@ -19,7 +19,7 @@
+@@ -20,7 +20,7 @@
  .SH SYNOPSIS
  
  .PP

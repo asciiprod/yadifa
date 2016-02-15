@@ -2,6 +2,6 @@ fix-yadifa-manpage.patch
 #fix-yadifad-manpage.patch
 #fix-yadifad.conf-manpage-whatis.patch
 fix-yadifad.conf.patch
-fix-yadifad-spelling.patch
+#fix-yadifad-spelling.patch
 fix-yadifarc-manpage.patch
 do-not-use-or-define-the-compile-date.patch
