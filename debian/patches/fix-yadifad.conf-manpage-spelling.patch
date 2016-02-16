@@ -1,0 +1,17 @@
+From: Markus Schade <markus.schade@gmail.com>
+Date: Wed, 16 Feb 2016 08:30:00 +0100
+Subject: fix lintian spelling warning
+
+diff --git a/doc/yadifad.conf.man b/doc/yadifad.conf.man
+index 0d68249..902ae20 100644
+--- a/doc/yadifad.conf.man
++++ b/doc/yadifad.conf.man
+@@ -347,7 +347,7 @@ Response Rate Limiting
+             # Number of identical responses per second before responses are being limited
+             responses\-per\-second 5
+ 
+-            # Number of errors per second before reponses are being limited
++            # Number of errors per second before responses are being limited
+             errors\-per\-second 5
+ 
+             # Random slip parameter
