@@ -9,7 +9,7 @@ Build-Depends:
  libssl-dev
 Standards-Version: 3.9.6
 Homepage: http://www.yadifa.eu
-Vcs-Git: git://github.com/asciiprod/yadifa.git
+Vcs-Git: https://github.com/asciiprod/yadifa.git
 Vcs-Browser: https://github.com/asciiprod/yadifa.git
 
 Package: yadifa
