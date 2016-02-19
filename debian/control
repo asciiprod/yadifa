@@ -7,7 +7,7 @@ Build-Depends:
  debhelper (>= 9),
  dh-systemd,
  libssl-dev
-Standards-Version: 3.9.6
+Standards-Version: 3.9.7
 Homepage: http://www.yadifa.eu
 Vcs-Git: https://github.com/asciiprod/yadifa.git
 Vcs-Browser: https://github.com/asciiprod/yadifa.git

@@ -1,8 +1,14 @@
 yadifa (2.1.6-1) unstable; urgency=low
 
   * New upstream version 2.1.6
+  * Changed Vcs-Git URI to https
+  * Refreshed no-compiledate patches
+  * Re-add patch fixing spelling errors
+  * Add CPPFLAGS to properly produce dbgsym package
+  * Re-order/fix configure options (tools) and enable dynamic provisioning
+  * Declare compliance with Debian policy 3.9.7
 
- -- Markus Schade <markus.schade@gmail.com>  Mon, 15 Feb 2016 19:56:30 +0100
+ -- Markus Schade <markus.schade@gmail.com>  Fri, 19 Feb 2016 12:45:30 +0100
 
 yadifa (2.1.4-2) unstable; urgency=low
 
