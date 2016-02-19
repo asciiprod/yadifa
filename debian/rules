@@ -5,6 +5,7 @@
 
 DEB_BUILD_MAINT_OPTIONS = hardening=+all,-pie
 DEB_CFLAGS_MAINT_APPEND = -Wall -Wextra
+DEB_CPPFLAGS_MAINT_APPEND = -DNDEBUG -g
 DPKG_EXPORT_BUILDFLAGS = 1
 -include /usr/share/dpkg/buildflags.mk
 
@@ -17,10 +18,11 @@ override_dh_clean:
 
 override_dh_auto_configure:
 	dh_auto_configure -- \
+		--with-tools	\
 		--enable-rrl	\
 		--enable-nsid	\
-		--enable-tools	\
-		--enable-ctrl
+		--enable-ctrl	\
+		--enable-dynamic-provisioning
 
 override_dh_installinit:
 	dh_installinit -a --no-start
