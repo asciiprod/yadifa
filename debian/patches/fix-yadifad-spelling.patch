@@ -3,11 +3,9 @@ Date: Wed, 16 Feb 2016 08:30:00 +0100
 Subject: fix lintian spelling warning in yadifad binary
 
 
-diff --git a/lib/dnsdb/src/journal-cjf-page-output-stream.c b/lib/dnsdb/src/journal-cjf-page-output-stream.c
-index 2a4e28e..34dc959 100644
 --- a/lib/dnsdb/src/journal-cjf-page-output-stream.c
 +++ b/lib/dnsdb/src/journal-cjf-page-output-stream.c
-@@ -172,7 +172,7 @@ journal_cjf_page_output_stream_next(output_stream *stream)
+@@ -173,7 +173,7 @@
      }
      else
      {
@@ -16,11 +14,9 @@ index 2a4e28e..34dc959 100644
      }
  }
  
-diff --git a/lib/dnsdb/src/journal.c b/lib/dnsdb/src/journal.c
-index fbc5dc2..3b7db4a 100644
 --- a/lib/dnsdb/src/journal.c
 +++ b/lib/dnsdb/src/journal.c
-@@ -275,7 +275,7 @@ journal_init(u32 mru_size)
+@@ -275,7 +275,7 @@
  
          journal_mru_size = MAX(MIN(mru_size, ZDB_JOURNAL_FD_MAX), ZDB_JOURNAL_FD_MIN);
          
@@ -29,11 +25,9 @@ index fbc5dc2..3b7db4a 100644
  
          journal_initialised = TRUE;
      }
-diff --git a/lib/dnsdb/src/zdb_icmtl.c b/lib/dnsdb/src/zdb_icmtl.c
-index 0172229..4091bb7 100644
 --- a/lib/dnsdb/src/zdb_icmtl.c
 +++ b/lib/dnsdb/src/zdb_icmtl.c
-@@ -808,7 +808,7 @@ zdb_icmtl_replay(zdb_zone *zone)
+@@ -953,7 +953,7 @@
          
          if((replay_state & ZDB_ICMTL_REPLAY_COMMIT) != 0)
          {
@@ -42,7 +36,7 @@ index 0172229..4091bb7 100644
              u64 ts_start = timeus();
              zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
              bytearray_input_stream_init_const(&bais, bytearray_output_stream_buffer(&baos), bytearray_output_stream_size(&baos));
-@@ -825,19 +825,19 @@ zdb_icmtl_replay(zdb_zone *zone)
+@@ -970,19 +970,19 @@
              
              if(ts_delta < 1000)
              {            

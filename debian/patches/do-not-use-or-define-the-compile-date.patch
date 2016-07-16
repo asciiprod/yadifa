@@ -6,14 +6,14 @@ Subject: Do not use or define COMPILEDATE, it makes the build not to be reproduc
 @@ -38,7 +38,6 @@
  #define     PROGRAM_NAME                            PACKAGE
  #define     PROGRAM_VERSION                         PACKAGE_VERSION
- #define     RELEASEDATE                             "2016-02-04"
+ #define     RELEASEDATE                             "2016-07-15"
 -#define     COMPILEDATE                             __DATE__
  
  #define     ROUND_ROBIN                             0x00
  
 --- a/bin/yadifa/yadifa-config.c
 +++ b/bin/yadifa/yadifa-config.c
-@@ -351,10 +351,10 @@
+@@ -385,10 +385,10 @@
              osformatln(termout, "%s %s (%s)", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
              break;
          case 2:
@@ -53,7 +53,7 @@ Subject: Do not use or define COMPILEDATE, it makes the build not to be reproduc
 +const char *dnsdb_lib = "dnsdb release";
  #endif
  
- static pthread_mutex_t *ssl_mutex = NULL;
+ void dnssec_keystore_init();
 --- a/lib/dnszone/src/dnszone.c
 +++ b/lib/dnszone/src/dnszone.c
 @@ -64,9 +64,9 @@
@@ -67,10 +67,10 @@ Subject: Do not use or define COMPILEDATE, it makes the build not to be reproduc
 +const char *dnszone_lib = "dnszone release";
  #endif
  
- dnslib_fingerprint
+ dnscore_fingerprint
 --- a/sbin/yadifad/confs.c
 +++ b/sbin/yadifad/confs.c
-@@ -228,10 +228,10 @@
+@@ -238,10 +238,10 @@
  	    osformatln(termout, "%s %s (%s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
  	    break;
  	case 2:
@@ -88,7 +88,7 @@ Subject: Do not use or define COMPILEDATE, it makes the build not to be reproduc
 @@ -84,7 +84,6 @@
  #define     PROGRAM_NAME                PACKAGE
  #define     PROGRAM_VERSION             PACKAGE_VERSION
- #define     RELEASEDATE                 "2016-02-04"
+ #define     RELEASEDATE                 "2016-07-15"
 -#define     COMPILEDATE                 __DATE__
  
      /* List of default values for the different configuration parameters */
