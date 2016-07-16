@@ -6,6 +6,7 @@ yadifa (2.2.0-1) unstable; urgency=low
       add example for dnssec policy
   * use /run instead of /var/run
   * Refreshed no-compiledate patches
+  * Bump Standards-Version to 3.9.8
 
  -- Markus Schade <markus.schade@gmail.com>  Sat, 16 Jul 2016 21:01:59 +0200
 
