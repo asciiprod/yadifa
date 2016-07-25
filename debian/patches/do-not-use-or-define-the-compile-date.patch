@@ -1,16 +1,6 @@
 From: Santiago Vila <sanvila@debian.org>
 Subject: Do not use or define COMPILEDATE, it makes the build not to be reproducible
 
---- a/bin/yadifa/common-config.h
-+++ b/bin/yadifa/common-config.h
-@@ -38,7 +38,6 @@
- #define     PROGRAM_NAME                            PACKAGE
- #define     PROGRAM_VERSION                         PACKAGE_VERSION
- #define     RELEASEDATE                             "2016-07-15"
--#define     COMPILEDATE                             __DATE__
- 
- #define     ROUND_ROBIN                             0x00
- 
 --- a/bin/yadifa/yadifa-config.c
 +++ b/bin/yadifa/yadifa-config.c
 @@ -385,10 +385,10 @@
@@ -88,8 +78,18 @@ Subject: Do not use or define COMPILEDATE, it makes the build not to be reproduc
 @@ -84,7 +84,6 @@
  #define     PROGRAM_NAME                PACKAGE
  #define     PROGRAM_VERSION             PACKAGE_VERSION
- #define     RELEASEDATE                 "2016-07-15"
+ #define     RELEASEDATE                 "2016-07-19"
 -#define     COMPILEDATE                 __DATE__
  
      /* List of default values for the different configuration parameters */
  #define     S_CONFIGDIR                 SYSCONFDIR "/"
+--- a/bin/yadifa/common-config.h
++++ b/bin/yadifa/common-config.h
+@@ -38,7 +38,6 @@
+ #define     PROGRAM_NAME                            PACKAGE
+ #define     PROGRAM_VERSION                         PACKAGE_VERSION
+ #define     RELEASEDATE                             "2016-07-19"
+-#define     COMPILEDATE                             __DATE__
+ 
+ #define     ROUND_ROBIN                             0x00
+ 
