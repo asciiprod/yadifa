@@ -13,3 +13,12 @@ Subject: fix lintian spelling warning
      errors\-per\-second       5
  
      # Random slip parameter
+@@ -646,7 +646,7 @@
+ .PP
+ Logging input configurations: 
+ .PP
+-The "bundle" name is predifined: database, dnssec, server, statistics, system, zone.
++The "bundle" name is predefined: database, dnssec, server, statistics, system, zone.
+ .br
+ The "debuglevel" uses the same names as syslog or "*" or "all" to filter the input.
+ .br

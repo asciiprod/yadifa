@@ -1,6 +1,8 @@
 yadifa (2.2.2-1) unstable; urgency=medium
 
   * New upstream version 2.2.2 (Closes: #828612)
+  * Refreshed no-compiledate patches
+  * Update spelling fix patches
 
  -- Markus Schade <markus.schade@gmail.com>  Tue, 08 Nov 2016 12:21:48 +0100
 
