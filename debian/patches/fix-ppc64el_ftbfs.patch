@@ -1,0 +1,25 @@
+--- /home/breno/yadifa-2.2.2/m4/eurid.m4	2016-11-08 05:56:43.140600104 -0500
++++ /home/breno/source/yadifa-2.2.2/m4/eurid.m4	2016-11-28 15:27:26.095324622 -0500
+@@ -298,6 +298,9 @@ case "$(uname -m)" in
+ 		CPU_UNKNOWN=0
+ 		cpu_intel_compatible=1
+ 		;;
++	ppc64le)
++		cpu_power_compatible=1
++		;;
+ 	*)
+ 		;;
+ esac
+@@ -626,6 +629,12 @@ then
+ 		fi
+ 	fi
+ 
++	dnl Move to O2 due to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=78543
++	if [[ $cpu_power_compatible -eq 1 ]]
++	then
++	    CCOPTIMISATIONFLAGS=-O2
++	fi
++	
+     AM_CONDITIONAL([USES_ICC], [false])
+     AM_CONDITIONAL([USES_GCC], [true])
+     AM_CONDITIONAL([USES_CLANG], [false])

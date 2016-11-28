@@ -1,3 +1,9 @@
+yadifa (2.2.2-1.1) UNRELEASED; urgency=medium
+
+  * Avoid compiling with O3 on ppc64el due to a known bug
+
+ -- Breno Leitao <breno.leitao@gmail.com>  Mon, 28 Nov 2016 15:12:29 -0500
+
 yadifa (2.2.2-1) unstable; urgency=medium
 
   * New upstream version 2.2.2 (Closes: #828612)
