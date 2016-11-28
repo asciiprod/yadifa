@@ -1,5 +1,5 @@
---- /home/breno/yadifa-2.2.2/m4/eurid.m4	2016-11-08 05:56:43.140600104 -0500
-+++ /home/breno/source/yadifa-2.2.2/m4/eurid.m4	2016-11-28 15:27:26.095324622 -0500
+--- a/m4/eurid.m4	2016-11-08 05:56:43.140600104 -0500
++++ b/m4/eurid.m4	2016-11-28 15:27:26.095324622 -0500
 @@ -298,6 +298,9 @@ case "$(uname -m)" in
  		CPU_UNKNOWN=0
  		cpu_intel_compatible=1
