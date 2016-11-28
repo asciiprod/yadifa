@@ -93,7 +93,9 @@ License: BSD-2-clause
  POSSIBILITY OF SUCH DAMAGE.
 
 Files: debian/patches/*
-Copyright: 2014-2015, Markus Schade <markus.schade@gmail.com>
+Copyright:
+  2014-2016, Markus Schade <markus.schade@gmail.com>
+  2016, Breno Leitao <breno.leitao@gmail.com>
 License: BSD-3-clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
