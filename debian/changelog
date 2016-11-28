@@ -1,6 +1,6 @@
-yadifa (2.2.2-1.1) UNRELEASED; urgency=medium
+yadifa (2.2.2-2) unstable; urgency=medium
 
-  * Avoid compiling with O3 on ppc64el due to a known bug
+  * Avoid compiling with O3 on ppc64el due to a known gcc bug (#845751)
 
  -- Breno Leitao <breno.leitao@gmail.com>  Mon, 28 Nov 2016 15:12:29 -0500
 
