@@ -1,3 +1,11 @@
+yadifa (2.2.3-1) unstable; urgency=medium
+
+  * New upstream version 2.2.3
+  * Refreshed no-compiledate patches
+  * Drop patches included upstream (except ppc64el referenced by upstream)
+
+ -- Markus Schade <markus.schade@gmail.com>  Sat, 17 Dec 2016 23:20:54 +0100
+
 yadifa (2.2.2-2) unstable; urgency=medium
 
   * Fix FTBFS on ppc64el due to a known gcc bug (#845751).
