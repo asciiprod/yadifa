@@ -1,3 +1,10 @@
+yadifa (2.2.5-1) unstable; urgency=medium
+
+  * New upstream version 2.2.5
+  * Refreshed no-compiledate patches
+
+ -- Markus Schade <markus.schade@gmail.com>  Tue, 02 May 2017 15:33:36 +0200
+
 yadifa (2.2.3-1) unstable; urgency=medium
 
   * New upstream version 2.2.3
