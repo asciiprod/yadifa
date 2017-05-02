@@ -1,4 +1,4 @@
 #pragma once
-// version 2.2.3.0-6711
-#define DNSZONE_VERSION 0x020203001a37LL// include/dnszone/dnszone-config-features.h
+// version 2.2.5.0-6937
+#define DNSZONE_VERSION 0x020205001b19LL// include/dnszone/dnszone-config-features.h
 
