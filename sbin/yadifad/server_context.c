@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -326,6 +326,33 @@ server_context_new_socket(struct addrinfo *udp_addr, int family, bool reuse_port
             close(sockfd);
             return ret;
         }
+#if UDP_USE_MESSAGES
+        if(family == SOCK_DGRAM)
+        {
+            if(FAIL(setsockopt(sockfd , IPPROTO_IPV6, DSTADDR_SOCKOPT, &on, sizeof(on))))
+            {
+                ret = ERRNO_ERROR;
+                ttylog_err("failed to setup alias handling on %{sockaddr}: %r", udp_addr->ai_addr, ret);
+                close(sockfd);
+                return ret;
+            }
+        }
+#endif
+    }
+    else
+    {
+#if UDP_USE_MESSAGES
+        if(family == SOCK_DGRAM)
+        {
+            if(FAIL(setsockopt(sockfd , IPPROTO_IP, DSTADDR_SOCKOPT, &on, sizeof(on))))
+            {
+                ret = ERRNO_ERROR;
+                ttylog_err("failed to setup alias handling on %{sockaddr}: %r", udp_addr->ai_addr, ret);
+                close(sockfd);
+                return ret;
+            }
+        }
+#endif
     }
 
     if(FAIL(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
