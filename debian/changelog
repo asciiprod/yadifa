@@ -2,6 +2,7 @@ yadifa (2.2.5-1) unstable; urgency=medium
 
   * New upstream version 2.2.5
   * Refreshed no-compiledate patches
+  * Drop ppc64el compile patch. GCC issue resolved (Closes: #859016)
 
  -- Markus Schade <markus.schade@gmail.com>  Tue, 02 May 2017 15:33:36 +0200
 
