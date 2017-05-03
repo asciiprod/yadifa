@@ -3,7 +3,7 @@ Upstream-Name: YADIFA
 Source: http://www.yadifa.eu
 
 Files: *
-Copyright: 2011-2015, EURid
+Copyright: 2011-2017, EURid
 License: EURid-BSD-like
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
@@ -94,7 +94,7 @@ License: BSD-2-clause
 
 Files: debian/patches/*
 Copyright:
-  2014-2016, Markus Schade <markus.schade@gmail.com>
+  2014-2017, Markus Schade <markus.schade@gmail.com>
   2016, Breno Leitao <breno.leitao@gmail.com>
 License: BSD-3-clause
  Redistribution and use in source and binary forms, with or without
