@@ -1,4 +1,4 @@
-fix-ppc64el_ftbfs.patch
+revert-ppc64el_ftbfs.patch
 fix-yadifa-manpage.patch
 fix-yadifad.conf.patch
 fix-yadifarc-manpage.patch
