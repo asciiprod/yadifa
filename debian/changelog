@@ -2,9 +2,10 @@ yadifa (2.2.5-1) unstable; urgency=medium
 
   * New upstream version 2.2.5
   * Refreshed no-compiledate patches
-  * Drop ppc64el compile patch. GCC issue resolved (Closes: #859016)
+  * Revert ppc64el compile patch. GCC issue resolved (Closes: #859016)
+  * Remove -no-pie flag (Closes: #865700)
 
- -- Markus Schade <markus.schade@gmail.com>  Tue, 02 May 2017 15:33:36 +0200
+ -- Markus Schade <markus.schade@gmail.com>  Mon, 03 Jul 2017 10:58:43 +0200
 
 yadifa (2.2.3-1) unstable; urgency=medium
 
