@@ -1,36 +1,42 @@
 From:  Breno Leitao <breno.leitao@gmail.com>
 Date: Mon, 28 Nov 2016 15:12:29 -0500
-Subject: Avoid compiling with O3 on ppc64el due to a known bug
+Subject: Revert compiling with O2 on ppc64el due to a known bug
 
-Due to GCC bug yadifa cannot be compiled with O3 on ppcel.
-This only fixed in GCC7 and won't be backported.
+Due to GCC bug yadifa could not be compiled with O3 on ppcel.
+This was fixed upstream in GCC7 and was backported to stretch.
+Hence revert the original patch now included upstream
 
 References:
  https://gcc.gnu.org/bugzilla/show_bug.cgi?id=71873
  https://gcc.gnu.org/bugzilla/show_bug.cgi?id=78543
 
---- a/m4/eurid.m4	2016-11-08 05:56:43.140600104 -0500
-+++ b/m4/eurid.m4	2016-11-28 15:27:26.095324622 -0500
-@@ -298,6 +298,9 @@ case "$(uname -m)" in
+--- a/m4/eurid.m4
++++ b/m4/eurid.m4
+@@ -298,12 +298,6 @@
  		CPU_UNKNOWN=0
  		cpu_intel_compatible=1
  		;;
-+	ppc64le)
-+		cpu_power_compatible=1
-+		;;
+-    ppc64le)
+-
+-        dnl https://github.com/asciiprod/yadifa/blob/master/debian/patches/fix-ppc64el_ftbfs.patch
+-
+-        cpu_power_compatible=1
+-        ;;
  	*)
  		;;
  esac
-@@ -626,6 +629,12 @@ then
+@@ -632,14 +626,6 @@
  		fi
  	fi
  
-+	dnl Move to O2 due to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=78543
-+	if [[ $cpu_power_compatible -eq 1 ]]
-+	then
-+	    CCOPTIMISATIONFLAGS=-O2
-+	fi
-+	
+-    dnl Move to O2 due to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=78543
+-    dnl https://github.com/asciiprod/yadifa/blob/master/debian/patches/fix-ppc64el_ftbfs.patch
+-
+-    if [[ $cpu_power_compatible -eq 1 ]]
+-    then
+-        CCOPTIMISATIONFLAGS=-O2
+-    fi
+-
      AM_CONDITIONAL([USES_ICC], [false])
      AM_CONDITIONAL([USES_GCC], [true])
      AM_CONDITIONAL([USES_CLANG], [false])
