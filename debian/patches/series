@@ -3,3 +3,4 @@ fix-yadifad.conf.patch
 fix-yadifarc-manpage.patch
 do-not-use-or-define-the-compile-date.patch
 #fix-ppc64el_ftbfs.patch
+CVE-2017-14339.patch

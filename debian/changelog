@@ -1,3 +1,10 @@
+yadifa (2.2.3-1+deb9u1) stretch-security; urgency=medium
+
+  * Fixes an issue where a maliciously crafted message may block the server.
+    Closes: #876315,  CVE-2017-14339
+
+ -- Markus Schade <markus.schade@gmail.com>  Thu, 21 Sep 2017 22:17:27 +0200
+
 yadifa (2.2.3-1) unstable; urgency=medium
 
   * New upstream version 2.2.3
