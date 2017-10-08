@@ -3,6 +3,7 @@ yadifa (2.2.6-1) unstable; urgency=medium
   * New upstream version 2.2.6
     Closes: #876315, CVE-2017-14339
   * Refreshed no-compiledate patches
+  * Update build dependency for debhelper
 
  -- Markus Schade <markus.schade@gmail.com>  Thu, 21 Sep 2017 11:59:20 +0200
 
