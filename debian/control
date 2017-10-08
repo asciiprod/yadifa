@@ -4,8 +4,7 @@ Priority: optional
 Maintainer: Markus Schade <markus.schade@gmail.com>
 Build-Depends:
  dh-autoreconf,
- debhelper (>= 9),
- dh-systemd,
+ debhelper (>= 9.20160709),
  libssl-dev
 Standards-Version: 3.9.8
 Homepage: http://www.yadifa.eu
