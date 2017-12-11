@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup yadifad
  *  @brief 
@@ -60,6 +60,8 @@
 #include "rrl.h"
 #include "acl.h"
 #include "config_acl.h"
+
+u32 zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set);
 
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
@@ -136,7 +138,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
 
     if(g_rrl_settings.ipv4_prefix_length == 0)
     {
-        log_warn("ipv4-prefix-lenght set to 0, setting to recommended value: " TOSTRING(RRL_IPV4_PREFIX_LENGTH_DEFAULT));
+        log_warn("ipv4-prefix-length set to 0, setting to recommended value: " TOSTRING(RRL_IPV4_PREFIX_LENGTH_DEFAULT));
         g_rrl_settings.ipv4_prefix_length = RRL_IPV4_PREFIX_LENGTH_DEFAULT;
     }
         
@@ -147,7 +149,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     }
     else
     {
-        log_warn("ipv4-prefix-lenght is wrong, setting to 32");
+        log_warn("ipv4-prefix-length is wrong, setting to 32");
         g_rrl_settings.ipv4_prefix_length = 32;
         g_rrl_settings.ipv4_prefix_mask = MAX_U32;
     }
@@ -156,7 +158,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     
     if(g_rrl_settings.ipv6_prefix_length == 0)
     {
-        log_warn("ipv6-prefix-lenght set to 0, setting to recommended value: " TOSTRING(RRL_IPV6_PREFIX_LENGTH_DEFAULT));
+        log_warn("ipv6-prefix-length set to 0, setting to recommended value: " TOSTRING(RRL_IPV6_PREFIX_LENGTH_DEFAULT));
         g_rrl_settings.ipv6_prefix_length = RRL_IPV6_PREFIX_LENGTH_DEFAULT;
     }
     
@@ -175,7 +177,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     }
     else
     {
-        log_warn("ipv6-prefix-lenght is wrong, setting to 128");
+        log_warn("ipv6-prefix-length is wrong, setting to 128");
         
         g_rrl_settings.ipv6_prefix_length = 128;
         mask_h = MAX_U64;
@@ -483,10 +485,10 @@ rrl_payload_copy(rrl_item_s *a, const rrl_item_s *b)
  *
  * Depth 0 is one node.
  *
- * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)
+ * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)1
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   32 /* 9227464 items max */
+#define AVL_MAX_DEPTH 32 // 9227464 items max (worst case)*/
 
 /*
  * The previx that will be put in front of each function name
@@ -717,7 +719,7 @@ rrl_slip(message_data *mesg)
                 ednsrecord += 2;
                 SET_U16_AT(*ednsrecord, htons(message_edns0_getmaxsize()));  // udp payload size
                 ednsrecord += 2;
-                SET_U32_AT(*ednsrecord, mesg->rcode_ext);    // edns flags
+                SET_U32_AT(*ednsrecord, mesg->rcode_ext);       // edns flags
                 ednsrecord += 4;
                 SET_U16_AT(*ednsrecord, 0);                     // rdata size
                 
@@ -747,8 +749,18 @@ rrl_slip(message_data *mesg)
     return return_code;
 }
 
+/**
+ * Look at the message for RRL processing.
+ * Returns an RRL code.
+ * After this call, the message may be truncated.
+ * 
+ * @param mesg the query message
+ * @param ans_auth_add the answer that would be given to the client
+ * @return an RRL error code
+ */
+
 ya_result
-rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add)
+rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
 {
     s32 return_code = RRL_PROCEED;
     
@@ -757,6 +769,12 @@ rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add)
     
     if(!g_rrl_settings.enabled || (g_rrl_settings.exempted_filter(mesg, &g_rrl_settings.exempted) > 0))
     {
+#ifdef DEBUG
+        log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: disabled or exempted",
+                &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass);
+#endif
+        mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
+
         return return_code;
     }
     
@@ -885,6 +903,15 @@ rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add)
                 }
             }
         }
+        
+        if(((return_code & (RRL_SLIP|RRL_DROP)) == 0) || g_rrl_settings.log_only)
+        {
+#ifdef DEBUG
+            log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: %x | %i",
+                    &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass, return_code, g_rrl_settings.log_only);
+#endif
+            mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
+        }
     }
     else
     {
@@ -917,6 +944,8 @@ rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add)
         }
         
         mutex_unlock(&rrl_mtx);
+                
+        mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
     }
     
     return return_code;
@@ -972,6 +1001,12 @@ rrl_cull_all()
     g_rrl_list.offset = -1;
     
     mutex_unlock(&rrl_mtx);
+}
+
+bool
+rrl_is_logonly()
+{
+    return g_rrl_settings.log_only;
 }
 
 /** @} */

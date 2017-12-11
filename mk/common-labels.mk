@@ -66,7 +66,10 @@ release-install: release install
 
 profile-install: profile install
 
-debug-install: debug install
+debug-install:
+	echo YCFLAGS=$(YDCFLAGS)
+	echo YLDFLAGS=$(YDLDFLAGS)
+	$(MAKE) install "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
 
 buildinfo.h: config.log
 	echo \#pragma once > buildinfo.h 2> /dev/null

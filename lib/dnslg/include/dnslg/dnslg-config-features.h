@@ -1,4 +1,5 @@
 #pragma once
-// version 2.2.6.0-7246
-#define DNSLG_VERSION 0x020206001c4eLL// include/dnslg/dnslg-config-features.h
+#define DNSLG_HAS_TSIG_SUPPORT 1
+// version 2.3.7.0-7545
+#define DNSLG_VERSION 0x020307001d79LL// include/dnslg/dnslg-config-features.h
 

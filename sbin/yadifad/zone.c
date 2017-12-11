@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup zone Routines for zone_data struct
  *  @ingroup yadifad
  *  @brief zone functions
@@ -68,6 +68,7 @@
 #if ZDB_HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec-keystore.h>
 #include "dnssec-policy.h"
+#include <dnsdb/nsec3.h>
 #endif
 
 #include "server.h"
@@ -79,20 +80,7 @@
 #define ZONEDATA_TAG 0x41544144454e4f5a
 #define ZDORIGIN_TAG 0x4e494749524f445a
 
-/*
- * 2011/10/18 : EDF: disabling the debug because it makes the legitimate error output unreadable.
- */
-
-#undef DEBUGLNF
-#undef DEBUGF
-#undef OSDEBUG
-#undef LDEBUG
-#undef OSLDEBUG
-#define DEBUGLNF(...)
-#define DEBUGF(...)
-#define OSDEBUG(...)
-#define LDEBUG(...)
-#define OSLDEBUG(...)
+#define DEBUG_ARC   0
 
 #ifndef NAME_MAX
 #define NAME_MAX 1024
@@ -279,13 +267,14 @@ void
 zone_acquire(zone_desc_s *zone_desc)
 {    
     mutex_lock(&zone_desc_rc_mtx);
-#ifdef DEBUG
+#if defined(DEBUG) && DEBUG_ARC
     s32 old_rc = zone_desc->rc;
+    s32 rc =
 #endif
-    s32 rc = ++zone_desc->rc;
+    ++zone_desc->rc;
     mutex_unlock(&zone_desc_rc_mtx);
+#if defined(DEBUG) && DEBUG_ARC
     log_debug6("acquire: %{dnsname}@%p rc=%i", zone_desc->origin, zone_desc, rc);
-#ifdef DEBUG
     char prefix[80];
     snformat(prefix, sizeof(prefix), "acquire: %{dnsname}@%p", zone_desc->origin, zone_desc);
     log_debug7("%s: RC from %i to %i", prefix, old_rc, rc);
@@ -307,7 +296,7 @@ zone_dump_allocated()
         u64_node *node = u64_set_avl_iterator_next_node(&iter);
         zone_desc_s *zone_desc = (zone_desc_s*)node->value;
 
-        u32 status_flags = zone_desc->status_flags;
+        u32 status_flags = zone_get_status(zone_desc);
         format_writer status_flags_fw = {zone_desc_status_flags_long_format, &status_flags};
         log_debug1("zone dump: %p #%llu, %llu, rc=%u, %{dnsname} status=%w",zone_desc, zone_desc->instance_id, zone_desc->instance_time_us, zone_desc->rc, zone_desc->origin, &status_flags_fw);
     }
@@ -333,15 +322,15 @@ zone_release(zone_desc_s *zone_desc)
     if(zone_desc != NULL)
     {
         mutex_lock(&zone_desc_rc_mtx);
-#ifdef DEBUG
+#if defined(DEBUG) && DEBUG_ARC
         s32 old_rc = zone_desc->rc;
 #endif
         s32 rc = --zone_desc->rc;
         mutex_unlock(&zone_desc_rc_mtx);
         
+#if defined(DEBUG) && DEBUG_ARC
         log_debug6("release: %{dnsname}@%p rc=%i", zone_desc->origin, zone_desc, rc);
         
-#ifdef DEBUG
         char prefix[80];
         snformat(prefix, sizeof(prefix), "release: %{dnsname}@%p", zone_desc->origin, zone_desc);
         log_debug7("%s: RC from %i to %i", prefix, old_rc, rc);
@@ -721,7 +710,7 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
         else if((zone_desc_match_bitmap = zone_desc_match(zone_desc, current_zone_desc)) == 0)
         {
             // already
-            log_debug("zone: %{dnsname} has already been set", zone_desc->origin);
+            log_debug("zone: %{dnsname} has already been set this way", zone_desc->origin);
 
             zone_set_writer_unlock(dset);
             
@@ -749,9 +738,9 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
     }
     else
     {
-        log_info("zone: %{dnsname} is a new zone", zone_desc->origin);
+        log_debug("zone: %{dnsname} is a new zone", zone_desc->origin);
         
-        zone_desc->status_flags = ZONE_STATUS_STARTING_UP;
+        zone_desc->_status_flags = ZONE_STATUS_STARTING_UP;
     }
         
     if(zone_desc->type == ZT_SLAVE)
@@ -904,11 +893,11 @@ zone_setmodified(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -919,11 +908,11 @@ zone_setloading(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -934,11 +923,11 @@ zone_setmustsavefile(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -949,11 +938,11 @@ zone_setmustsaveaxfr(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -964,11 +953,11 @@ zone_setsavingfile(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -979,11 +968,11 @@ zone_setsavingaxfr(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -994,78 +983,78 @@ zone_setstartingup(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
 bool
 zone_isidle(zone_desc_s *zone_desc)
 {
-    return (zone_desc->status_flags & ZONE_STATUS_BUSY) == 0;
+    return (zone_get_status(zone_desc) & ZONE_STATUS_BUSY) == 0;
 }
 
 bool
 zone_isfrozen(zone_desc_s *zone_desc)
 {
-    return (zone_desc->status_flags & ZONE_STATUS_FROZEN) != 0;
+    return (zone_get_status(zone_desc) & ZONE_STATUS_FROZEN) != 0;
 }
 
 bool
 zone_ismodified(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_MODIFIED) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_MODIFIED) != 0);
 }
 
 bool
 zone_isloading(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_LOADING) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_LOADING) != 0);
 }
 
 bool
 zone_mustsavefile(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_SAVETO_ZONE_FILE) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_SAVETO_ZONE_FILE) != 0);
 }
 
 bool
 zone_mustsaveaxfr(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_SAVETO_AXFR_FILE) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_SAVETO_AXFR_FILE) != 0);
 }
 
 bool
 zone_issavingfile(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_SAVING_ZONE_FILE) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_SAVING_ZONE_FILE) != 0);
 }
 
 bool
 zone_issavingaxfr(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_SAVING_AXFR_FILE) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_SAVING_AXFR_FILE) != 0);
 }
 
 bool
 zone_isstartingup(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_STARTING_UP) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_STARTING_UP) != 0);
 }
 
 bool
 zone_isdynamicupdating(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_DYNAMIC_UPDATING) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_DYNAMIC_UPDATING) != 0);
 }
  
 bool
 zone_canbeedited(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & (ZONE_STATUS_STARTING_UP|ZONE_STATUS_DYNAMIC_UPDATING|ZONE_STATUS_SAVING_AXFR_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_LOADING)) == 0);
+    return ((zone_get_status(zone_desc) & (ZONE_STATUS_STARTING_UP|ZONE_STATUS_DYNAMIC_UPDATING|ZONE_STATUS_SAVING_AXFR_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_LOADING)) == 0);
 }
 
 bool
@@ -1105,18 +1094,19 @@ zone_is_obsolete(zone_desc_s *zone_desc)
     mutex_lock(&zone_desc->lock);
 
     r = ((zone_desc->lock_owner_count | zone_desc->lock_wait_count) == 0) &&
-        ((zone_desc->status_flags & (ZONE_STATUS_UNREGISTERING|ZONE_STATUS_MARKED_FOR_DESTRUCTION)) != 0);
+        ((zone_get_status(zone_desc) & (ZONE_STATUS_UNREGISTERING|ZONE_STATUS_MARKED_FOR_DESTRUCTION)) != 0);
 
     mutex_unlock(&zone_desc->lock);
     
     return r;
 }
 
-ya_result zone_try_lock(zone_desc_s *zone_desc, u8 owner_id)
+ya_result zone_try_lock
+(zone_desc_s *zone_desc, u8 owner_id)
 {
     log_debug6("zone_try_lock(%{dnsname}@%p, %u", zone_desc->origin, zone_desc, owner_id);
     
-    ya_result return_value = ERROR;
+    ya_result return_value = LOCK_TIMEOUT;
     
     mutex_lock(&zone_desc->lock);
     
@@ -1173,6 +1163,53 @@ zone_lock(zone_desc_s *zone_desc, u8 owner_id)
     return return_value;
 }
 
+ya_result
+zone_try_lock_wait(zone_desc_s *zone_desc, u64 usec, u8 owner_id)
+{
+    ya_result return_value = ERROR;
+    
+    log_debug6("zone_lock(%{dnsname}@%p, %02x)", zone_desc->origin, zone_desc, owner_id);
+
+    mutex_lock(&zone_desc->lock);
+    
+    if(zone_desc->lock_owner != ZONE_LOCK_UNREGISTER)
+    {
+        if((zone_desc->lock_owner != ZONE_LOCK_NOBODY) && (zone_desc->lock_owner != owner_id))
+        {
+            zone_desc->lock_wait_count++;
+            
+            s64 start = timeus();
+            
+            do
+            {
+                cond_timedwait(&zone_desc->lock_cond, &zone_desc->lock, usec);
+                
+                s64 now = timeus();
+                
+                if(now - start >= usec)
+                {
+                    pthread_cond_broadcast(&zone_desc->lock_cond);
+                    mutex_unlock(&zone_desc->lock);
+                    return LOCK_TIMEOUT;
+                }
+            }
+            while((zone_desc->lock_owner != ZONE_LOCK_NOBODY) && (zone_desc->lock_owner != owner_id));
+
+            zone_desc->lock_wait_count--;
+        }
+
+        zone_desc->lock_owner = owner_id & 0x7f;
+        zone_desc->lock_owner_count++;
+        
+        return_value = owner_id;
+    }
+    
+    pthread_cond_broadcast(&zone_desc->lock_cond);
+    mutex_unlock(&zone_desc->lock);
+    
+    return return_value;
+}
+
 void
 zone_unlock(zone_desc_s *zone_desc, u8 owner_mark)
 {
@@ -1219,7 +1256,7 @@ zone_setdefaults(zone_desc_s *zone_desc)
         port = DNS_DEFAULT_PORT;
     }
     
-    zone_desc->status_flags = ZONE_STATUS_STARTING_UP;
+    zone_desc->_status_flags = ZONE_STATUS_STARTING_UP;
     
 #if HAS_ACL_SUPPORT
     acl_merge_access_control(&zone_desc->ac, &g_config->ac);
@@ -1294,7 +1331,7 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
         if(strcmp(desc_zone_desc->domain, src_zone_desc->domain) != 0)
         {
             log_debug1("zone_setwithzone: domain does not match '%s'!='%s'", desc_zone_desc->domain, src_zone_desc->domain);
-            return ERROR;
+            return INVALID_STATE_ERROR;
         }
     }
     else
@@ -1307,7 +1344,7 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
 #endif
         desc_zone_desc->dynamic_provisioning.flags = desc_zone_desc->dynamic_provisioning.flags;
         desc_zone_desc->origin = dnsname_dup(src_zone_desc->origin);
-        desc_zone_desc->status_flags = src_zone_desc->status_flags;
+        desc_zone_desc->_status_flags = src_zone_desc->_status_flags;
         if(src_zone_desc->file_name != NULL)
         {
             desc_zone_desc->file_name = strdup(src_zone_desc->file_name);
@@ -1596,7 +1633,7 @@ zone_desc_log(logger_handle* handle, u32 level, const zone_desc_s *zone_desc, co
     
     logger_handle_msg(handle, level, "%s: %{dnsname} @%p '%s' file='%s'",
             text, FQDNNULL(zone_desc->origin), zone_desc, STRNULL(zone_desc->domain), STRNULL(zone_desc->file_name));
-    u32 status_flags = zone_desc->status_flags;
+    u32 status_flags = zone_get_status(zone_desc);
     //format_writer status_flags_fw = {zone_desc_status_flags_format, &status_flags};
     format_writer status_flags_fw = {zone_desc_status_flags_long_format, &status_flags};
     logger_handle_msg(handle, level, "%s: %{dnsname} status=%w",
@@ -1807,7 +1844,7 @@ zone_dnssec_to_name(u32 dnssec_flags)
 void
 zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priority) /// @todo 20141016 edf -- test all callers RCs
 {
-    if(!has_priority && ((zone_desc->status_flags & ZONE_STATUS_MARKED_FOR_DESTRUCTION) != 0))
+    if(!has_priority && ((zone_get_status(zone_desc) & ZONE_STATUS_MARKED_FOR_DESTRUCTION) != 0))
     {
         log_err("tried to queue to a zone marked for destruction");
         return;
@@ -1815,8 +1852,13 @@ zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priori
     
 #ifdef DEBUG
     log_debug("zone_desc: enqueue command %{dnsname}@%p=%i %c %s",
-            zone_desc->origin, zone_desc, zone_desc->rc, (has_priority)?'H':'L', database_service_operation_get_name(id));
+    zone_desc->origin, zone_desc, zone_desc->rc, (has_priority)?'H':'L', database_service_operation_get_name(id));
 #endif
+    
+    if(zone_desc->commands_bits & (1 << id))
+    {
+        return; // already queued
+    }
     
     zone_command_s *cmd;
     ZALLOC_OR_DIE(zone_command_s*, cmd, zone_command_s, ZONECMD_TAG);
@@ -1829,7 +1871,7 @@ zone_command_s*
 zone_dequeue_command(zone_desc_s *zone_desc)
 {
     zone_command_s *cmd = (zone_command_s*)bpqueue_dequeue(&zone_desc->commands);
-    
+        
 #ifdef DEBUG
     if(cmd != NULL)
     {
@@ -1843,6 +1885,11 @@ zone_dequeue_command(zone_desc_s *zone_desc)
     }
 #endif
     
+    if(cmd != NULL)
+    {
+        zone_desc->commands_bits &= ~(1 << cmd->id);
+    }
+
     return cmd;
 }
 
@@ -1889,6 +1936,118 @@ zone_has_loaded_zone(zone_desc_s *zone_desc)
     return zone != NULL;
 }
 
-/** @} */
+void
+zone_set_status(zone_desc_s *zone_desc, u32 flags)
+{
+#ifdef DEBUG
+    log_debug("zone: %{dnsname}: %p: status %08x + %08x -> %08x", zone_desc->origin, zone_desc, zone_desc->_status_flags, flags, zone_desc->_status_flags|flags);
+#endif
+    zone_desc->_status_flags |= flags;
+}
 
-/*----------------------------------------------------------------------------*/
+void
+zone_clear_status(zone_desc_s *zone_desc, u32 flags)
+{
+#ifdef DEBUG
+    log_debug("zone: %{dnsname}: %p: status %08x - %08x -> %08x", zone_desc->origin, zone_desc, zone_desc->_status_flags, flags, zone_desc->_status_flags&~flags);
+#endif
+    
+    zone_desc->_status_flags &= ~flags;
+    if((flags & ZONE_STATUS_PROCESSING) == 0)
+    {
+        // poke
+        database_fire_zone_processed(zone_desc);
+    }
+}
+
+u32
+zone_get_status(const zone_desc_s *zone_desc)
+{
+    return zone_desc->_status_flags;
+}
+
+void
+zone_dnssec_status_update(zdb_zone *zone)
+{
+    u8 zone_dnssec_type = zone_policy_guess_dnssec_type(zone);
+    u8 maintain_mode = zone_get_maintain_mode(zone);
+    bool update_chain0 = FALSE;
+
+    switch(zone_dnssec_type)
+    {
+        case ZONE_DNSSEC_FL_NOSEC:
+        {
+            if((maintain_mode & ZDB_ZONE_MAINTAIN_MASK) != 0)
+            {
+                zone->apex->flags &= ~(ZDB_RR_LABEL_NSEC | ZDB_RR_LABEL_NSEC3 | ZDB_RR_LABEL_NSEC3_OPTOUT);
+                zone_set_maintain_mode(zone, 0);
+            }
+            break;
+        }
+        case ZONE_DNSSEC_FL_NSEC:
+        {
+            if((maintain_mode & ZDB_ZONE_MAINTAIN_NSEC) == 0)
+            {
+                zone->apex->flags |= ZDB_RR_LABEL_NSEC;
+                zone->apex->flags &= ~(ZDB_RR_LABEL_NSEC3 | ZDB_RR_LABEL_NSEC3_OPTOUT);
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+            }
+            break;
+        }
+        case ZONE_DNSSEC_FL_NSEC3:
+        {
+            if((maintain_mode & ZDB_ZONE_MAINTAIN_NSEC3) == 0)
+            {
+                zone->apex->flags |= ZDB_RR_LABEL_NSEC3;
+                zone->apex->flags &= ~(ZDB_RR_LABEL_NSEC | ZDB_RR_LABEL_NSEC3_OPTOUT);
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3);
+                update_chain0 = TRUE;
+            }
+            break;
+        }
+        case ZONE_DNSSEC_FL_NSEC3_OPTOUT:
+        {
+            if((maintain_mode & ZDB_ZONE_MAINTAIN_NSEC3) == 0)
+            {
+                zone->apex->flags |= ZDB_RR_LABEL_NSEC3 | ZDB_RR_LABEL_NSEC3_OPTOUT;
+                zone->apex->flags &= ~(ZDB_RR_LABEL_NSEC);
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+                update_chain0 = TRUE;
+            }
+            break;
+        }
+    }
+    
+    if(update_chain0)
+    {
+        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_LOAD);
+        nsec3_zone_update_chain0_links(zone);
+        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_LOAD);
+    }
+}
+
+u8
+zone_policy_guess_dnssec_type(zdb_zone *zone)
+{
+    u8 zone_dnssec_type = ZONE_DNSSEC_FL_NOSEC;
+       
+    if(zdb_zone_has_nsec_records(zone))
+    {
+        zone_dnssec_type = ZONE_DNSSEC_FL_NSEC;
+    }
+    else if(zdb_zone_has_nsec3_records(zone))
+    {
+        if(zdb_zone_has_nsec3_optout_chain(zone))
+        {
+            zone_dnssec_type = ZONE_DNSSEC_FL_NSEC3_OPTOUT;
+        }
+        else
+        {
+             zone_dnssec_type = ZONE_DNSSEC_FL_NSEC3;
+        }
+    }
+    
+    return zone_dnssec_type;
+}
+
+/** @} */

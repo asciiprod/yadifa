@@ -28,6 +28,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/Makefile.am $
+#
+#       Last Update:
+#               $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $
+#               $Revision: 7307 $
+#
+#       Purpose:
+#               YADIFA main Makefile.am script
+#
+################################################################################
 
 srcdir =        @srcdir@
 top_srcdir =    @top_srcdir@
@@ -52,19 +64,19 @@ endif
 
 SUBDIRS += etc doc var
 
-release: features
+release:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m release;done
 
-profile: features
+profile:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m profile;done
 
-debug: features
+debug:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m debug;done
 
 showsubdirs:
 	for m in $(SUBDIRS); do echo $$m; done
 
-features: config.log
+features:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m features;done
 
 

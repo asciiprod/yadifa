@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup dnscore
  *  @brief 
@@ -234,7 +234,7 @@ static inline void cond_init(cond_t *cond)
 u64 timeus();
 #endif
 
-static inline void cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
+static inline int cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
 {
     struct timespec ts;
 #if (defined(_POSIX_TIMERS) && (_POSIX_TIMERS > 0)) || defined(__MACH__)
@@ -257,12 +257,13 @@ static inline void cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
 #endif
     
 #if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-    pthread_cond_timedwait(cond, mtx, &ts);
+    int ret = pthread_cond_timedwait(cond, mtx, &ts);
 #else
     mtx->wait = TRUE;
-    pthread_cond_timedwait(cond, &mtx->mtx, &ts);
+    int ret = pthread_cond_timedwait(cond, &mtx->mtx, &ts);
     mtx->wait = FALSE;
 #endif
+    return ret;
 }
 
 // Only use this if there is only one possible thread waiting on
@@ -373,6 +374,15 @@ static inline int smp_int_dec_get(smp_int *v)
     return ret;
 }
 
+static inline int smp_int_get_dec(smp_int *v)
+{
+    int ret;
+    pthread_mutex_lock(&v->mutex);
+    ret = v->value--;
+    pthread_mutex_unlock(&v->mutex);
+    return ret;
+}
+
 static inline bool smp_int_setifequal(smp_int *v, int from, int to)
 {
     bool didit = FALSE;
@@ -426,6 +436,9 @@ static inline void smp_int_destroy(smp_int *v)
 #define GROUP_MUTEX_PRIVATE 0x80    // THIS IS A MASK, ADD IT TO THE OWNER ID
 #define GROUP_MUTEX_DESTROY 0xfe
 
+#define GROUP_MUTEX_LOCKMASK_FLAG 0x7f
+#define GROUP_MUTEX_EXCLUSIVE_FLAG 0x80
+
 typedef struct group_mutex_t group_mutex_t;
 
 struct group_mutex_t
@@ -439,12 +452,13 @@ struct group_mutex_t
 #endif
     volatile s32 count;
     volatile u8 owner;
+    volatile u8 reserved_owner;
 };
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, 0, 0, 0, 0}
+#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, 0, 0, 0, 0, 0}
 #else
-#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, 0, 0}
+#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, 0, 0, 0}
 #endif
 
 void group_mutex_init(group_mutex_t* mtx);
@@ -454,6 +468,10 @@ void group_mutex_unlock(group_mutex_t *mtx, u8 owner);
 bool group_mutex_transferlock(group_mutex_t *mtx, u8 owner, u8 newowner);
 void group_mutex_destroy(group_mutex_t* mtx);
 bool group_mutex_islocked(group_mutex_t* mtx);
+
+void group_mutex_double_lock(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
+void group_mutex_double_unlock(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
+void group_mutex_exchange_locks(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 void group_mutex_locked_set_monitor();

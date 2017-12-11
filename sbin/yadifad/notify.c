@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup yadifad
  *  @brief 
@@ -92,6 +92,7 @@ extern logger_handle *g_server_logger;
 #define NOTIFY_MESSAGE_TYPE_NOTIFY  1
 #define NOTIFY_MESSAGE_TYPE_ANSWER  2
 #define NOTIFY_MESSAGE_TYPE_DOMAIN  3
+#define NOTIFY_MESSAGE_TYPE_CLEAR   4
 
 #define MESSAGE_QUERY_TIMEOUT 5
 #define MESSAGE_QUERY_TRIES   1
@@ -121,14 +122,15 @@ struct message_query_summary
     u16 id;
     // for answers, ip/port should be kept but they are already in the host list (sa.sa4,sa.sa6,addrlen)
     // times we send the udp packet before giving up
-    s8 tries;     
+    s8 tries;
     // for signed answers, these have to be kept
     u8 mac_size;    // mesg->tsig.mac_size;
+    u8 fqdn[256];
     u8 mac[64];     // mesg->tsig.mac;    
 };
 
 static void
-message_query_summary_init(message_query_summary *mqs, u16 id, host_address *host, const u8 *mac, u8 mac_size)
+message_query_summary_init(message_query_summary *mqs, u16 id, const u8 *fqdn, host_address *host, const u8 *mac, u8 mac_size)
 {
     yassert(mqs != NULL);
 #if HAS_TSIG_SUPPORT
@@ -145,6 +147,8 @@ message_query_summary_init(message_query_summary *mqs, u16 id, host_address *hos
     mqs->id = id;
     // payload
     mqs->tries = MESSAGE_QUERY_TRIES;
+    
+    dnsname_copy(mqs->fqdn, fqdn);
     
 #if HAS_TSIG_SUPPORT
     if(mac_size > 0)
@@ -189,8 +193,13 @@ message_query_summary_compare(const void* va, const void* vb)
     d = (s32)a->id - (s32)b->id;
     
     if(d == 0)
-    {    
+    {
         d = host_address_compare(a->host, b->host);
+        
+        if(d == 0)
+        {
+            d = dnsname_compare(a->fqdn, b->fqdn);
+        }
     }
     
     return d;
@@ -199,6 +208,11 @@ message_query_summary_compare(const void* va, const void* vb)
 typedef struct notify_message notify_message;
 
 struct notify_message_domain
+{
+    u8 type;
+};
+
+struct notify_message_clear
 {
     u8 type;
 };
@@ -238,6 +252,7 @@ struct notify_message
         struct notify_message_notify notify;
         struct notify_message_answer answer;
         struct notify_message_domain domain;
+        struct notify_message_clear  clear;
     } payload;
 };
 
@@ -272,7 +287,6 @@ notify_slaveanswer(message_data *mesg)
         bool aa = MESSAGE_AA(mesg->buffer)!=0;
                 
         ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
-
         message->origin = dnsname_zdup(origin);
         message->payload.type = NOTIFY_MESSAGE_TYPE_ANSWER;
         message->payload.answer.rcode = rcode;
@@ -334,7 +348,6 @@ notify_masterquery_read_soa(u8 *origin, packet_unpack_reader_data *reader, u32 *
                     {
                         if(packet_reader_read(reader, tmp, 4) == 4)
                         {
-                            
                             *serial = ntohl(GET_U32_AT_P(tmp));
                             
                             return TRUE;
@@ -417,7 +430,7 @@ notify_masterquery_thread(void *args_)
         {
             /* get the current serial of the zone */
             
-            if(ISOK(zdb_zone_getserial(dbzone, &current_serial)))
+            if(ISOK(zdb_zone_getserial(dbzone, &current_serial))) // zone is locked
             {
                /*
                 * If the serial on the "master" is lower,
@@ -526,8 +539,6 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
     socketaddress sa;
     
     ya_result return_code;
-               
-    /** @todo 20130506 edf -- check if adding the SOA helps bind to update faster */
 
     message_make_notify(msgdata, id, origin, ntype, nclass);
     
@@ -600,7 +611,11 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
             }
             else
             {
-                log_err("notify: %{dnsname}: failed to send notify to %{sockaddr}: %r", origin, &sa.sa, ERRNO_ERROR);
+                int err = errno;
+                if(err != ENOTSOCK)
+                {
+                    log_err("notify: %{dnsname}: failed to send notify to %{sockaddr}: %r", origin, &sa.sa, MAKE_ERRNO_ERROR(err));
+                }
             }
         }
         else
@@ -693,38 +708,6 @@ notify_process_masterquery_in(message_data *mesg, packet_unpack_reader_data *rea
             }
 #endif
             
-#if OBSOLETE
-            if(host_address_list_contains_ip(zone_desc->masters, &mesg->other))
-            {
-                if(zone_isidle(zone_desc) && !zone_isfrozen(zone_desc) && !zone_is_obsolete(zone_desc))
-                {
-                    return_value = notify_masterquery(mesg, reader); // thread-safe
-                    
-                    zone_release(zone_desc);
-                    
-                    return return_value;
-                }
-                else
-                {
-                    log_info("notify: slave: zone %{dnsname} is busy", zone_desc->origin);
-                    /* or not */
-                    database_zone_refresh_maintenance(g_config->database, zone_desc->origin, time(NULL) + 5); // thread-safe
-                    
-                    zone_release(zone_desc);
-
-                    return SUCCESS;
-                }
-            }
-            else
-            {
-                log_warn("notify: slave: notification from %{sockaddr}: not in the master list for zone %{dnsname}",
-                        &mesg->other.sa, mesg->qname);
-
-                mesg->status = FP_NONMASTER_NOTIFIES_SLAVE;
-                mesg->send_length = mesg->received;
-                return_value = NOTIFY_QUERY_FROM_UNKNOWN;
-            }
-#else
             if(!zone_isfrozen(zone_desc))
             {
                 return_value = notify_masterquery(mesg, reader); // thread-safe
@@ -733,7 +716,6 @@ notify_process_masterquery_in(message_data *mesg, packet_unpack_reader_data *rea
             {
                 log_info("notify: slave: %{dnsname}: %{sockaddr}: zone is frozen", mesg->qname, &mesg->other.sa);
             }
-#endif
         }   /* type = SLAVE */
         else
         {
@@ -870,6 +852,10 @@ notify_message_free(notify_message *msg)
         return;
     }
     
+#ifdef DEBUG
+    log_debug("notify_message_free({%{dnsname}@%p, %i}@%p)", msg->origin, msg->origin, msg->payload.type, msg);
+#endif
+    
     if(msg->origin != NULL)
     {
         dnsname_zfree(msg->origin);
@@ -897,6 +883,10 @@ notify_message_free(notify_message *msg)
             break;
         }
         case NOTIFY_MESSAGE_TYPE_DOMAIN:
+        {
+            break;
+        }
+        case NOTIFY_MESSAGE_TYPE_CLEAR:
         {
             break;
         }
@@ -946,12 +936,7 @@ notify_service(struct service_worker_s *worker)
     
     ptr_set current_queries = PTR_SET_EMPTY;
     current_queries.compare = message_query_summary_compare;
-    u32 last_current_queries_cleanup_epoch_us = 0;
-
-    /**
-     * @todo 20111216 edf -- the idea here is to get the right interface.
-     *       This loop breaking at the first result is of course wrong.
-     */
+    u64 last_current_queries_cleanup_epoch_us = 0;
 
     const addressv6 localhost6 = {.bytes = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}};
     socketaddress *sa4 = NULL;
@@ -1044,7 +1029,7 @@ notify_service(struct service_worker_s *worker)
 
     log_debug("notify: notification service main loop reached");
 
-    while(service_shouldrun(worker) || !async_queue_emtpy(&notify_handler_queue))
+    while(service_shouldrun(worker) || !async_queue_empty(&notify_handler_queue))
     {
         {   /* what happens in here should not interfere with the rest of the function */
                 
@@ -1074,7 +1059,8 @@ notify_service(struct service_worker_s *worker)
 #ifdef DEBUG
                         double expired_since = last_current_queries_cleanup_epoch_us - mqs->expire_epoch_us;
                         expired_since /= 1000000.0;
-                        log_debug("notify: query (%hx) to %{hostaddr} expired %f seconds ago", mqs->id, mqs->host, expired_since);
+                        log_debug("notify: query (%hx) %{dnsname} to %{hostaddr} expired %f seconds ago",
+                                mqs->id, mqs->fqdn, mqs->host, expired_since);
 #endif                  
                         if(--mqs->tries <= 0)
                         {
@@ -1084,13 +1070,14 @@ notify_service(struct service_worker_s *worker)
                         else
                         {
 #ifdef DEBUG
-                            log_debug("notify: query (%hx) to %{hostaddr} got %hhi tries left (NOT IMPLEMENTED)", mqs->id, mqs->host, mqs->tries);
+                            log_debug("notify: query (%hx) %{dnsname} to %{hostaddr} expired %f seconds ago retrying (%i times remaining)",
+                                    mqs->id, mqs->fqdn, mqs->host, expired_since, mqs->tries);
 #endif                  
                             mqs->expire_epoch_us = tus + MESSAGE_QUERY_TIMEOUT_US;
                             
                             // send the message again
                             
-                            // notify_send(mqs->host, msgdata, mqs->id, origin, ztype, zclass);
+                            notify_send(mqs->host, msgdata, mqs->id, mqs->fqdn, TYPE_SOA, CLASS_IN);
                         }
                     }
                 }
@@ -1103,6 +1090,14 @@ notify_service(struct service_worker_s *worker)
                     message_query_summary* mqs = current;
                     current = current->next;
                     ptr_set_avl_delete(&current_queries, mqs);
+                    
+                    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(g_config->database, mqs->fqdn); // RC++
+                    if(zone != NULL)
+                    {
+                        zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+                        zdb_zone_release(zone);
+                    }
+                    
                     message_query_summary_delete(mqs);
                 }
             }
@@ -1127,9 +1122,28 @@ notify_service(struct service_worker_s *worker)
                 
                 break;
             }
+            
+            if(dnscore_shuttingdown())
+            {
+                notify_message_free(message);
+                async_message_release(async);
+                continue;
+            }
 
             switch(message->payload.type)
             {
+                case NOTIFY_MESSAGE_TYPE_CLEAR:
+                {
+                    notify_message* zone_message = (notify_message*)ptr_set_avl_find(&notify_zones, message->origin);
+                    if(zone_message != NULL)
+                    {
+                        log_info("notify: %{dnsname}: removing slaves notifications", message->origin);
+                        
+                        ptr_set_avl_delete(&notify_zones, message->origin);
+                        notify_message_free(zone_message);
+                    }
+                    break;
+                }
                 case NOTIFY_MESSAGE_TYPE_DOMAIN:
                 {
                     if(!notify_slaves_convert_domain_to_notify(message))
@@ -1185,10 +1199,6 @@ notify_service(struct service_worker_s *worker)
                      * The current queue has been resolved.
                      */
 
-                    /*
-                     * @todo 20111216 edf -- remove myself
-                     */
-
                     /**
                      * The list has to replace the current one for message->origin (because it's starting again)
                      */
@@ -1205,6 +1215,19 @@ notify_service(struct service_worker_s *worker)
                     else
                     {
                         node->value = message;
+                    }
+                    
+                    // ready to send
+                    
+                    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(g_config->database, message->origin); // RC++
+                    if(zone != NULL)
+                    {
+                        zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+                        zdb_zone_release(zone);
+                    }
+                    else
+                    {
+                        log_err("notify: %{dnsname}: could not un-mark zone as queue for notification: zone not found ?", message->origin);
                     }
 
                     message->payload.notify.epoch = time(NULL);
@@ -1227,12 +1250,6 @@ notify_service(struct service_worker_s *worker)
                              * Look for the entry and remove it
                              */
                             
-                            /**
-                             * @todo 20121130 edf -- VERIFY THE TSIG HERE
-                             * 
-                             * The possible TSIG in the message has to be verified here
-                             */
-                         
                             /* message->payload.answer.tsig ... */
                             
                             /* all's good so remove the notify query from the list */
@@ -1248,7 +1265,7 @@ notify_service(struct service_worker_s *worker)
                                 if(ha->tsig != NULL)
                                 {
                                     u16 id = MESSAGE_ID(message->payload.answer.message->buffer);
-                                    message_query_summary_init(&tmp, id, ha, NULL, 0);
+                                    message_query_summary_init(&tmp, id, &message->payload.answer.message->buffer[12], ha, NULL, 0);
                                     // try to find the exact match
                                     ptr_node *node = ptr_set_avl_find(&current_queries, &tmp);
                                     message_query_summary_clear(&tmp);
@@ -1360,11 +1377,16 @@ notify_service(struct service_worker_s *worker)
         while(ptr_set_avl_iterator_hasnext(&zones_iter))
         {
             ptr_node *zone_node = ptr_set_avl_iterator_next_node(&zones_iter);
-
             notify_message *message = zone_node->value;
 
             if(message->payload.notify.epoch > now)
             {
+                continue;
+            }
+            
+            if(dnscore_shuttingdown())
+            {
+                ptr_vector_append(&todelete, message);
                 continue;
             }
 
@@ -1388,9 +1410,9 @@ notify_service(struct service_worker_s *worker)
                     ZALLOC_OR_DIE(message_query_summary*, mqs, message_query_summary, MSGQSUMR_TAG);
 
 #if HAS_TSIG_SUPPORT
-                    message_query_summary_init(mqs, id, ha, msgdata->tsig.mac, msgdata->tsig.mac_size);
+                    message_query_summary_init(mqs, id, &msgdata->buffer[12], ha, msgdata->tsig.mac, msgdata->tsig.mac_size);
 #else
-                    message_query_summary_init(mqs, id, ha, NULL, 0);
+                    message_query_summary_init(mqs, id, &msgdata->buffer[12], ha, NULL, 0);
 #endif
                     ptr_node *node = ptr_set_avl_insert(&current_queries, mqs);
 
@@ -1536,8 +1558,40 @@ notify_slaves(const u8 *origin)
 {
     if(!notify_service_initialised)
     {
+        log_warn("notify: %{dnsname}: notification service has not been initialised", origin);
+        
         return;
     }
+    
+    zdb *db = g_config->database;
+    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, origin); // RC++
+    
+    if((zone == NULL) || ZDB_ZONE_INVALID(zone))
+    {
+        if(zone != NULL)
+        {
+            zdb_zone_release(zone);
+        }
+        
+        log_warn("notify: %{dnsname}: notify called on an invalid zone", origin);
+        
+        return;
+    }
+    
+    if((zdb_zone_get_status(zone) & ZDB_ZONE_STATUS_WILL_NOTIFY) != 0)
+    {
+        // zone already marked for notification
+        zdb_zone_release(zone);
+        
+        log_debug("notify: %{dnsname}: already marked for notification", origin);
+        
+        return;
+    }
+    
+    log_info("notify: %{dnsname}: slaves notification will be sent", origin);
+    
+    zdb_zone_set_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+    zdb_zone_release(zone); // RC--
     
     notify_message *message;
     ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
@@ -1551,6 +1605,46 @@ notify_slaves(const u8 *origin)
     async->handler = NULL;
     async->handler_args = NULL;
     async_message_call(&notify_handler_queue, async);
+}
+
+static ya_result
+notify_slaves_alarm(void *args_, bool cancel)
+{
+    u8 *origin = (u8*)args_;
+    if(notify_service_initialised && !cancel)
+    {
+        log_debug("notify: %{dnsname}: delayed retry", origin);
+        
+        notify_message *message;
+        ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
+
+        message->origin = origin;
+        message->payload.domain.type = NOTIFY_MESSAGE_TYPE_DOMAIN;
+
+        async_message_s *async = async_message_alloc();
+        async->id = 0;
+        async->args = message;
+        async->handler = NULL;
+        async->handler_args = NULL;
+        async_message_call(&notify_handler_queue, async);
+    }
+    else
+    {
+        zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(g_config->database, origin); // RC++
+        if(zone != NULL)
+        {
+            zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+            zdb_zone_release(zone);
+        }
+        else
+        {
+            log_err("notify: %{dnsname}: alarm-cancel: could not un-mark zone as queue for notification: zone not found ?", origin);
+        }
+        
+        dnsname_zfree(origin);
+    }
+    
+    return SUCCESS;
 }
 
 /**
@@ -1582,14 +1676,18 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
 
     zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, message->origin); // RC++
     
-    if((zone == NULL) || ZDB_ZONE_INVALID(zone))
+    if((zone == NULL) || ZDB_ZONE_INVALID(zone) || !notify_service_initialised)
     {
         if(zone != NULL)
         {
+            zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
             zdb_zone_release(zone);
         }
         
-        log_debug("notify: %{dnsname}: zone temporarily unavailable", message->origin);
+        if(notify_service_initialised)
+        {
+            log_debug("notify: %{dnsname}: zone temporarily unavailable", message->origin);
+        }
         
         return FALSE;
     }
@@ -1597,6 +1695,7 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
     zone_desc_s *zone_desc = zone_acquirebydnsname(message->origin);
     if(zone_desc == NULL)
     {
+        zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
         zdb_zone_release(zone);
         log_err("notify: %{dnsname}: zone not configured", message->origin);
         return FALSE;
@@ -1607,80 +1706,62 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
     memset(&list, 0xff, sizeof(list));
 #endif
     list.next = NULL;
+    list.version = HOST_ADDRESS_NONE;
+    
+    bool lock_failed = FALSE;
+    
     /* no need to set TSIG */
     
     if(zone_ismaster(zone_desc) && zone_is_auto_notify(zone_desc))
     {
-        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-        
-        // get the SOA
-        zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
-        // get the NS
-        zdb_packed_ttlrdata *ns = zdb_record_find(&zone->apex->resource_record_set, TYPE_NS);    
-        // get the IPs for each NS but the one in the SOA
-
-        u8 *soa_mname = ZDB_PACKEDRECORD_PTR_RDATAPTR(soa);
-        u32 soa_mname_size = dnsname_len(soa_mname);
-        u8 *soa_rname = soa_mname + soa_mname_size;
-        u8 *serial_ptr = soa_rname + dnsname_len(soa_rname);
-        u32 serial = *((u32*)serial_ptr);
-        serial = ntohl(serial);
-
-        for(zdb_packed_ttlrdata *nsp = ns; nsp != NULL; nsp = nsp->next)
+        if(zdb_zone_trylock_wait(zone, 1000000, ZDB_ZONE_MUTEX_SIMPLEREADER))
+        //if(zdb_zone_trylock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER))
         {
-            u32 ns_dname_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsp);
-            u8 *ns_dname = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsp);
+            // get the SOA
+            zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA); // zone is locked
+            // get the NS
+            zdb_packed_ttlrdata *ns = zdb_record_find(&zone->apex->resource_record_set, TYPE_NS); // zone is locked
+            // get the IPs for each NS but the one in the SOA
 
-            if(ns_dname_size == soa_mname_size)
+            u8 *soa_mname = ZDB_PACKEDRECORD_PTR_RDATAPTR(soa);
+            u32 soa_mname_size = dnsname_len(soa_mname);
+            u8 *soa_rname = soa_mname + soa_mname_size;
+            u8 *serial_ptr = soa_rname + dnsname_len(soa_rname);
+            u32 serial = *((u32*)serial_ptr);
+            serial = ntohl(serial);
+
+            for(zdb_packed_ttlrdata *nsp = ns; nsp != NULL; nsp = nsp->next)
             {
-                if(memcmp(ns_dname, soa_mname, soa_mname_size) == 0)
-                {
-                    continue;
-                }
-            }
+                u32 ns_dname_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsp);
+                u8 *ns_dname = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsp);
 
-            /* valid candidate : get its IP, later */
+                if(ns_dname_size == soa_mname_size)
+                {
+                    if(memcmp(ns_dname, soa_mname, soa_mname_size) == 0)
+                    {
+                        continue;
+                    }
+                }
+
+                /* valid candidate : get its IP, later */
             
-#if 1
-            if(zdb_append_ip_records(db, ns_dname, &list) <= 0)
-            {
-                // If no IP has been found, they will have to be resolved using the system ... later
-
-                host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
-            }
-#else
-            zdb_packed_ttlrdata *a_records = NULL;
-            zdb_packed_ttlrdata *aaaa_records = NULL;
-
-            zdb_query_ip_records(db, ns_dname, &a_records, &aaaa_records);
-
-            // If there is any bit set in the returned pointers ...
-
-            if(((intptr)a_records|(intptr)aaaa_records) != 0)
-            {
-                // Add these IPs to the list.
-
-                while(a_records != NULL)
+                if(zdb_append_ip_records(db, ns_dname, &list) <= 0) // zone is locked
                 {
-                    host_address_append_ipv4(&list, ZDB_PACKEDRECORD_PTR_RDATAPTR(a_records), NU16(DNS_DEFAULT_PORT));
-                    a_records = a_records->next;
-                }
-                while(aaaa_records != NULL)
-                {
-                    host_address_append_ipv6(&list, ZDB_PACKEDRECORD_PTR_RDATAPTR(aaaa_records), NU16(DNS_DEFAULT_PORT));
-                    aaaa_records = aaaa_records->next;
+                    // If no IP has been found, they will have to be resolved using the system ... later
+
+                    host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
                 }
             }
-            else
-            {
-                // If no IP has been found, they will have to be resolved using the system ... later
 
-                host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
-            }
-#endif
+            zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
         }
-        
-        zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+        else
+        {
+            log_debug("notify: %{dnsname}: zone already locked", message->origin);
+            
+            lock_failed = TRUE;
+            zdb_zone_release(zone);
+        }
     }
     else
     {
@@ -1690,38 +1771,77 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
     // at this point I have the list of every IP I could find along with names I cannot resolve.
     // note that we don't need to care about the changes in the database : it would mean a new
     // notify and this one would be discarded
-
-    host_address *also_notifies = zone_desc->notifies;
-
-    while(also_notifies != NULL)
+    
+    if(!lock_failed && ISOK(zone_try_lock_wait(zone_desc, 1000000, ZONE_LOCK_READONLY)))
     {
-        host_address_append_host_address(&list, also_notifies); //copy made
+        log_debug("notify: %{dnsname}: preparing notification", message->origin);
+        
+        const host_address *also_notifies = zone_desc->notifies;
 
-        also_notifies = also_notifies->next;
+        while(also_notifies != NULL)
+        {
+            host_address_append_host_address(&list, also_notifies); //copy made
+
+            also_notifies = also_notifies->next;
+        }
+        
+        // It's separate from the DB push the lot thread from the pool
+
+        if(list.next != NULL)
+        {
+            message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;
+            message->payload.notify.hosts_list = list.next;
+            message->payload.notify.repeat_countdown = zone_desc->notify.retry_count; /* 10 times */
+            message->payload.notify.repeat_period = zone_desc->notify.retry_period; /* 1 minute */
+            message->payload.notify.repeat_period_increase = zone_desc->notify.retry_period_increase; /* 1 minute */
+            message->payload.notify.ztype = TYPE_SOA;
+            message->payload.notify.zclass = CLASS_IN;
+        }
+        
+        zone_unlock(zone_desc, ZONE_LOCK_READONLY);
     }
-
-    // It's separate from the DB push the lot
-
-    // thread from the pool
-
-    if(list.next != NULL)
+    else
     {
+        // could not lock the zone right away : delay a bit
+        log_debug("notify: %{dnsname}: delaying notification", message->origin);
+        
+        zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, message->origin); // RC++
+        if(zone != NULL)
+        {        
+            if(!ZDB_ZONE_INVALID(zone))
+            {
+                alarm_event_node *event = alarm_event_new(
+                        time(NULL),
+                        ALARM_KEY_ZONE_NOTIFY_SLAVES,
+                        notify_slaves_alarm,
+                        dnsname_zdup(message->origin),
+                        ALARM_DUP_REMOVE_LATEST,
+                        "notify slaves");
 
-        message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;
-        message->payload.notify.hosts_list = list.next;
-        message->payload.notify.repeat_countdown = zone_desc->notify.retry_count; /* 10 times */
-        message->payload.notify.repeat_period = zone_desc->notify.retry_period; /* 1 minute */
-        message->payload.notify.repeat_period_increase = zone_desc->notify.retry_period_increase; /* 1 minute */
-        message->payload.notify.ztype = TYPE_SOA;
-        message->payload.notify.zclass = CLASS_IN;
-
+                alarm_set(zone->alarm_handle, event);
+            }
+            else
+            {
+                // if the message is ignored, will-notify status must be cleared
+                zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+                
+                log_warn("notify: %{dnsname}: (temporarily) invalid zone, notify slaves request will remain ignored", message->origin);
+            }
+            
+            zdb_zone_release(zone);
+        }
+        else
+        {
+            // could not get the zone anymore
+            
+            log_warn("notify: %{dnsname}: could not acquire the zone, notify slaves request will remain ignored", message->origin);
+        }
     }
     
     zone_release(zone_desc);
     
     return message->payload.type == NOTIFY_MESSAGE_TYPE_NOTIFY;
 }
-
 
 /**
  * Stops all notification for zone with origin
@@ -1732,8 +1852,18 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
 void
 notify_clear(const u8 *origin)
 {
-    (void)origin;
+    notify_message *message;
+    
+    ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
+    message->origin = dnsname_zdup(origin);
+    message->payload.type = NOTIFY_MESSAGE_TYPE_CLEAR;
 
+    async_message_s *async = async_message_alloc();
+    async->id = 0;
+    async->args = message;
+    async->handler = NULL;
+    async->handler_args = NULL;
+    async_message_call(&notify_handler_queue, async);
 }
 
 void
@@ -1770,15 +1900,15 @@ notify_service_init()
     {
         if(notify_thread_pool == NULL)
         {
-            if((notify_thread_pool = thread_pool_init_ex(10, 4096, "notify-tp")) == NULL)
+            if((notify_thread_pool = thread_pool_init_ex(10, 4096, "notify")) == NULL)
             {
-                return ERROR;
+                return THREAD_CREATION_ERROR;
             }
         }
         
-        if(ISOK(err = service_init_ex(&notify_handler, notify_service, "yadifad-notify", 1)))
+        if(ISOK(err = service_init_ex(&notify_handler, notify_service, "Notify", 1)))
         {
-            async_queue_init(&notify_handler_queue, 4096, 1, 1000000, "yadifad-notify");
+            async_queue_init(&notify_handler_queue, 4096, 1, 1000000, "notify");
             
             notify_service_initialised = TRUE;
         }
@@ -1853,7 +1983,4 @@ notify_service_finalise()
     return err;
 }
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup server
  *  @ingroup yadifad
  *  @brief server
@@ -1046,43 +1046,35 @@ ctrl_query_zonecfgreload(message_data *mesg)
                 zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
                 tmp_status = RCODE_REFUSED;
 
-                // if the zone is unknown
-                // or if the zone is known and control is allowed ...
-                
-                if(     (zone_desc == NULL) ||
-                        (
-                            (zone_desc != NULL) &&
-                                (rclass == zone_desc->qclass) && (view[0] == '\0') &&
-                                    !ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control))
-                        ) )
+                if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
                 {
-                    tmp_status = RCODE_SERVFAIL;
+                    tmp_status = RCODE_NOTAUTH;
 
-                    const_ptr_set_of_one fqdn_set;
-                    const_ptr_set_of_one_init(&fqdn_set, fqdn, fqdn, ptr_set_dnsname_node_compare);
-
-                    ya_result return_code = yadifad_config_update_zone(g_config->config_file, &fqdn_set.set);
-
-                    if(ISOK(return_code))
+                    if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
                     {
-                        tmp_status = RCODE_NOERROR;
-                        mesg->send_length = mesg->received;
+                        tmp_status = RCODE_SERVFAIL;
+                        
+                        // const_ptr_set_of_one is a quick and cheap way to generate constant ptr_set of a single element
+                        
+                        const_ptr_set_of_one fqdn_set;
+                        const_ptr_set_of_one_init(&fqdn_set, fqdn, fqdn, ptr_set_dnsname_node_compare);
 
-                        if(zone_desc != NULL)
+                        ya_result return_code = yadifad_config_update_zone(g_config->config_file, &fqdn_set.set);
+
+                        if(ISOK(return_code))
                         {
+                            tmp_status = RCODE_NOERROR;
+                            mesg->send_length = mesg->received;
                             zone_release(zone_desc);
-                        }
 
-                        return;
+                            return;
+                        }
                     }
-                }
-                else
-                {
-                    log_err("ctrl: zone config reload: rejected by ACL");
-                }
-                
-                if(zone_desc != NULL)
-                {
+                    else
+                    {
+                        log_err("ctrl: zone config reload: rejected by ACL");
+                    }
+
                     zone_release(zone_desc);
                 }
             }
@@ -1094,8 +1086,6 @@ ctrl_query_zonecfgreload(message_data *mesg)
         else if(pc == 0)
         {
             tmp_status = RCODE_NOTAUTH;
-            
-            log_info("ctrl: zone config reload");
 
             if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_control)))
             {
@@ -1107,10 +1097,6 @@ ctrl_query_zonecfgreload(message_data *mesg)
                 {
                     tmp_status = RCODE_NOERROR;
                     return;
-                }
-                else
-                {
-                    log_err("ctrl: zone config reload failed with %r", return_code);
                 }
             }
         }

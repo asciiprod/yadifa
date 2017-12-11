@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
+#
+#	YADIFA dnscore Makefile.am script
+#
+#		Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnscore/Makefile.am $
+#
+#	   $Date: 2017-12-05 08:55:57 +0100 (Tue, 05 Dec 2017) $
+#
+#	   $Revision: 7503 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 srcdir =	@srcdir@
 libdir =	@libdir@
@@ -86,6 +100,7 @@ libdnscore_la_SOURCES = \
 	src/dnskey_dsa.c \
     src/dnskey_ecdsa.c \
 	src/dnskey_rsa.c \
+	src/dnskey-signature.c \
 	src/dnsname.c \
 	src/empty-input-stream.c \
 	src/fdtools.c \
@@ -97,6 +112,7 @@ libdnscore_la_SOURCES = \
 	src/identity.c \
 	src/input_stream.c \
 	src/limited_input_stream.c \
+    src/limiter.c \
 	src/list-dl.c \
 	src/list-sl.c \
 	src/list-sl-debug.c \
@@ -109,6 +125,7 @@ libdnscore_la_SOURCES = \
 	src/message-buffer.c \
 	src/message-viewer.c \
 	src/message.c \
+	src/message_print_format_dig.c \
 	src/message_verify_rrsig.c \
     src/message_dnsupdate.c \
 	src/mt_output_stream.c \
@@ -194,6 +211,7 @@ pkginclude_HEADERS = \
 	$(I)/dnskey_dsa.h \
     $(I)/dnskey_ecdsa.h \
 	$(I)/dnskey_rsa.h \
+	$(I)/dnskey-signature.h \
 	$(I)/dnsname.h \
 	$(I)/dnsname_set.h \
 	$(I)/dnssec_errors.h \
@@ -209,6 +227,7 @@ pkginclude_HEADERS = \
 	$(I)/input_stream.h \
 	$(I)/io_stream.h \
 	$(I)/limited_input_stream.h \
+    $(I)/limiter.h \
 	$(I)/list-dl.h \
 	$(I)/list-sl.h \
 	$(I)/list-sl-debug.h \
@@ -287,7 +306,7 @@ pkginclude_HEADERS += $(I)/nsid.h
 libdnscore_la_SOURCES += src/nsid.c
 endif
 
-libdnscore_la_LDFLAGS = -version-info 3:0:0
+libdnscore_la_LDFLAGS = -version-info 6:3:0
 
 include ../../mk/common-settings.mk
 
@@ -308,11 +327,6 @@ if HAS_TSIG_SUPPORT
 	echo "#define DNSCORE_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
 else
 	echo "#define DNSCORE_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_RDTSC
-	echo "#define DNSCORE_HAS_RDTSC 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_RDTSC 0" >> $(FEATURES)
 endif
 if HAS_ACL_SUPPORT
 	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
@@ -364,6 +378,12 @@ if HAS_MEMALIGN_ISSUES
 else
 	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 0" >> $(FEATURES)
 endif
+if HAS_LOG_THREAD_TAG_ALWAYS_ON
+	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 0" >> $(FEATURES)
+endif
+
 VP=DNSCORE
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \

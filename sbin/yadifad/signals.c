@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -67,12 +67,29 @@
 #include <dnscore/format.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/timems.h>
+#include <dnscore/thread_pool.h>
 
 #include "signals.h"
 #include "server_context.h"
 #include "server.h"
 #if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
 #include "database-service-zone-resignature.h"
+#endif
+
+#ifdef DEBUG
+#if IS_LINUX_FAMILY
+#include <sys/types.h>
+#include <asm/unistd.h>
+static inline long int gettid()
+{
+    return (long int)syscall(__NR_gettid);
+}
+#else
+static inline long int gettid()
+{
+    return (long int)~0;
+}
+#endif
 #endif
 
 #define MODULE_MSG_HANDLE g_server_logger
@@ -83,7 +100,7 @@
 // Let's configure this using runtime flags.
 #define SIGNAL_HOOK_COREDUMP 1
 
-#define LOGGER_REOPEN_MIN_PERIOD_US 10000000
+#define LOGGER_REOPEN_MIN_PERIOD_US 1000000
 
 ya_result database_save_all_zones_to_disk();
 
@@ -239,22 +256,34 @@ signal_ptr2str(char *dest, const void* srcp)
 static void
 signal_task_reconfigure_reopen_log()
 {  
-    log_debug1("signal_task_reconfigure_reopen_log()");
+    // TRY debug as else there is a risk of deadlock
+    log_try_debug1("signal_task_reconfigure_reopen_log()");
     
     u64 now = timeus();
         
     if(now - signal_task_logger_handle_reopen_last_active > LOGGER_REOPEN_MIN_PERIOD_US)
-    {        
+    {
         signal_task_logger_handle_reopen_last_active = now;
+        
+        log_try_debug1("signal_task_reconfigure_reopen_log(): setting the sink");
+        
+        logger_sink();
         
         if(g_config->reloadable)
         {
+            log_try_debug1("signal_task_reconfigure_reopen_log(): reloading configuration");
+            
             yadifad_config_update(g_config->config_file);
         }
         else
         {
-            log_err("cannot reopen configuration file(s): '%s' is outside of jail", g_config->config_file);
+            // TRY error as else there is a risk of deadlock
+            log_try_err("cannot reopen configuration file(s): '%s' is outside of jail", g_config->config_file);
         }
+        
+#ifdef DEBUG
+        log_try_debug1("signal_task_reconfigure_reopen_log(): reopening log files");
+#endif
         
         logger_reopen();
         
@@ -267,11 +296,13 @@ signal_task_reconfigure_reopen_log()
     {
         double dt = LOGGER_REOPEN_MIN_PERIOD_US - (now - signal_task_logger_handle_reopen_last_active);
         dt /= 1000000.0;
-        log_debug1("signal_task_reconfigure_reopen_log(): ignore for %.3fs", dt);
+        
+        log_try_debug1("signal_task_reconfigure_reopen_log(): ignore for %.3fs", dt);
     }
 #endif
     
-    log_debug1("signal_task_reconfigure_reopen_log(): end");
+    // TRY debug as else there is a risk of deadlock
+    log_try_debug1("signal_task_reconfigure_reopen_log(): end");
 }
 
 /***/
@@ -308,10 +339,25 @@ signal_task_shutdown()
     log_debug("signal_task_shutdown(): end");
 }
 
+static void
+signal_handler_thread_stop()
+{
+    log_info("signal: thread stopping");
+                
+    close_ex(signal_handler_read_fd);
+    mutex_lock(&signal_mutex);
+    signal_handler_read_fd = -1;
+    mutex_unlock(&signal_mutex);
+}
+
 static void*
 signal_handler_thread(void* parms)
 {
     (void)parms;
+    
+#ifdef DEBUG
+    log_debug7("thread started: self=%p, tid=%i", pthread_self(), gettid());
+#endif
 
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
@@ -321,6 +367,10 @@ signal_handler_thread(void* parms)
     pthread_setname_np(pthread_self(), "signal-handler");
 #endif // __APPLE__
 #endif
+#endif
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_set_tag(pthread_self(), "signal");
 #endif
     
     log_info("signal: thread started");
@@ -359,6 +409,10 @@ signal_handler_thread(void* parms)
         {
             case SIGHUP:
             {
+                // that was a bad idea as logs may be full and this is the only way
+                // to save the situation :
+                // log_info("signal: HUP");
+                
                 if(!dnscore_shuttingdown())
                 {
                     signal_task_reconfigure_reopen_log();
@@ -368,26 +422,33 @@ signal_handler_thread(void* parms)
             
             case SIGUSR1:
             {
+                log_info("signal: USR1");
                 if(!dnscore_shuttingdown())
                 {
                     signal_task_database_save_all_zones_to_disk();
                 }
                 break;
             }
+
             case SIGINT:
+            {
+                log_info("signal: INT");
+                signal_task_shutdown();
+                signal_handler_thread_stop();
+                break;
+            }
+            
             case SIGTERM:
             {
+                log_info("signal: TERM");
                 signal_task_shutdown();
+                signal_handler_thread_stop();
+                break;
             }
             
             case MAX_U8:
             {
-                log_info("signal: thread stopping");
-                
-                close_ex(signal_handler_read_fd);
-                mutex_lock(&signal_mutex);
-                signal_handler_read_fd = -1;
-                mutex_unlock(&signal_mutex);
+                signal_handler_thread_stop();
                 break;
             }
             
@@ -403,6 +464,11 @@ signal_handler_thread(void* parms)
     mutex_lock(&signal_mutex);
     signal_thread = 0;
     mutex_unlock(&signal_mutex);
+    
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_clear_tag(pthread_self());
+#endif
     
     return NULL;
 }
@@ -448,6 +514,8 @@ signal_handler(int signo, siginfo_t* info, void* context)
         case SIGUSR1:
 
         {
+            logger_sink_noblock(); // this allow detaching from a deleted log file on a full partition (thus freeing some space on the disk)
+            
             int errno_value = errno;
             u8 signum = (u8)signo;
             write(signal_handler_write_fd, &signum, sizeof(signum));
@@ -512,7 +580,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -542,7 +610,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -561,7 +629,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -616,7 +684,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         if(source == 0)
                         {
                             writefully(fd, filepath, len);
-                            fsync(fd);
+                            fsync_ex(fd);
                         }
                         else
                         {
@@ -656,7 +724,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         if(source == 0)
                         {
                             writefully(fd, filepath, len);
-                            fsync(fd);
+                            fsync_ex(fd);
                         }
                         else
                         {
@@ -685,7 +753,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                             if(source == 0)
                             {
                                 writefully(fd, filepath, len);
-                                fsync(fd);
+                                fsync_ex(fd);
                             }
                             else
                             {
@@ -704,7 +772,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         if(source == 0)
                         {
                             writefully(fd, filepath, len);
-                            fsync(fd);
+                            fsync_ex(fd);
                         }
                         else
                         {
@@ -718,14 +786,25 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     signal_strcat(filepath, number);
                     signal_strcat(filepath, " ");
                     signal_strcat(filepath, "thread id: ");
-                    signal_int2str(number, (u32)pthread_self());
+                    
+                    pthread_t self = pthread_self();
+                    
+                    if(sizeof(self) >= sizeof(u64))
+                    {
+                        signal_longlong2hexstr(number,(u64)self);
+                    }
+                    else
+                    {
+                        signal_int2hexstr(number,(u32)self);
+                    }
+                    
                     signal_strcat(filepath, number);
                     len = signal_strcat(filepath, eol);
                     
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd); // fd IS initialised : (source == 0) => fd set
+                        fsync_ex(fd); // fd IS initialised : (source == 0) => fd set
                     }
                     else
                     {
@@ -739,7 +818,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     const u8 *addr = (u8*)info->si_addr;
                     for(;;)
                     {
-                        u8 *page_addr = (u8*) (((intptr)addr + PAGESIZE-1) & ~(PAGESIZE - 1));
+                        u8 *page_addr = (u8*)(((intptr)addr) & ~(PAGESIZE - 1));
                         unsigned char vec[1];
 
                         if(mincore(page_addr, PAGESIZE, vec) == 0)
@@ -773,7 +852,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                                 if(source == 0)
                                 {
                                     writefully(fd, filepath, len);
-                                    fsync(fd); // fd IS initialised : (source == 0) => fd set
+                                    fsync_ex(fd); // fd IS initialised : (source == 0) => fd set
                                 }
                                 else
                                 {
@@ -816,7 +895,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                             if(source == 0)
                             {
                                 writefully(fd, filepath, len);
-                                fsync(fd); // fd IS initialised : (source == 0) => fd set
+                                fsync_ex(fd); // fd IS initialised : (source == 0) => fd set
                             }
                             else
                             {
@@ -840,7 +919,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     {
                         writefully(fd, filepath, len);
                         printstack(fd);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -866,7 +945,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -897,16 +976,11 @@ signal_handler(int signo, siginfo_t* info, void* context)
                 log_err("CRITICAL ERROR");
                 logger_flush();
             }
+            
+            debug_malloc_hook_tracked_dump();
+            flushout();
 
             errno = errno_value;
-            
-            /* trigger the original signal (to dump a core if possible ) */
-
-            raise(signo);
-
-            /* should never be reached : Exit without disabling stuff (no atexit registered function called) */
-
-            _exit(EXIT_CODE_SELFCHECK_ERROR);
 
             break;
         }
@@ -984,7 +1058,13 @@ signal_handler_init()
         return pthread_errcode;
     }
     
-    u8 handled_signals[] =
+#if SIGNAL_HOOK_COREDUMP
+    log_debug("signal_handler_init(): will handle error signals");
+#else
+    log_debug("signal_handler_init(): will not handle error signals");
+#endif
+    
+    static const u8 handled_signals[] =
     {
         SIGHUP,		/* Hangup (POSIX).  */
         SIGINT,		/* Interrupt (ANSI).  */
@@ -1020,29 +1100,36 @@ signal_handler_init()
     };
 
     struct sigaction action;
+    struct sigaction error_action;
     int signal_idx;
     
-    ZEROMEMORY(&action,sizeof(action));
-
+    ZEROMEMORY(&action, sizeof(action));
     action.sa_sigaction = signal_handler;
+#ifdef SA_NOCLDWAIT
+    action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT;
+#else /// @note 20151119 edf -- quick fix for Debian Hurd i386, and any other system missing SA_NOCLDWAIT
+    action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP;
+#endif
+    
+    ZEROMEMORY(&error_action, sizeof(error_action));
+    error_action.sa_sigaction = signal_handler;
+#ifdef SA_NOCLDWAIT
+    error_action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT | SA_RESETHAND;
+#else /// @note 20151119 edf -- quick fix for Debian Hurd i386, and any other system missing SA_NOCLDWAIT
+    error_action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_RESETHAND;
+#endif
     
     for(signal_idx = 0; handled_signals[signal_idx] != 0; signal_idx++)
     {
-#ifdef SA_NOCLDWAIT
-        action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT;
-#else /// @note 20151119 edf -- quick fix for Debian Hurd i386, and any other system missing SA_NOCLDWAIT
-        action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP;
-#endif
-        
         switch(signal_idx)
         {
             case SIGBUS:
             case SIGFPE:
             case SIGILL:
             case SIGSEGV:
+            case SIGABRT:
             {
-                sigemptyset(&action.sa_mask);    /* can interrupt the interrupt */
-                
+                sigemptyset(&error_action.sa_mask);    /* can interrupt the interrupt */
                 break;
             }
             default:
@@ -1056,7 +1143,7 @@ signal_handler_init()
     
     action.sa_handler = SIG_IGN;
 
-    for(signal_idx = 0; ignored_signals[signal_idx] != 0; signal_idx++)
+    for(signal_idx = 0; ignored_signals[signal_idx] != 0; ++signal_idx)
     {
         sigaction(ignored_signals[signal_idx], &action, NULL);
     }
@@ -1142,8 +1229,6 @@ signal_handler_finalise()
             log_err("signal: handler is unexpectedly still running");
         }        
     }
-  
-    
     
     log_debug("signal_handler_finalise() done");
 }
