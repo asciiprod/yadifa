@@ -1,3 +1,11 @@
+yadifa (2.3.7-1) unstable; urgency=medium
+
+  * New upstream version 2.3.7
+  * Drop no-compiledate patch in favor of new disable-build-timestamp option
+  * Drop revert ppc64el patch now upstream
+
+ -- Markus Schade <markus.schade@gmail.com>  Mon, 11 Dec 2017 15:59:52 +0100
+
 yadifa (2.2.6-1) unstable; urgency=medium
 
   * New upstream version 2.2.6
