@@ -30,44 +30,32 @@
  *
  *------------------------------------------------------------------------------
  *
- */
-/** @defgroup ### #######
- *  @ingroup dnsdb
- *  @brief 
+ *      SVN Program:
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/bin/yadifa/message-viewer-parse.h $
  *
- *   Incremental-fileS-to-ICMTL input stream.
- *   Takes the 3 files translates them into an incremental stream.
- *   An incremntal stream is ALMOST an IXFR.
+ *      Last Update:
+ *              $Date: 2017-10-03 15:40:30 +0200 (Tue, 03 Oct 2017) $
+ *              $Revision: 7328 $
+ *
+ *      Last Change:
+ *              $Author: ericdf $
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
+/** @defgroup 
+ *  @ingroup 
+ *  @brief 
  *
  * @{
  */
-#ifndef _ICMTL_INPUT_STREAM_H
-#define	_ICMTL_INPUT_STREAM_H
-/*------------------------------------------------------------------------------
- *
- * USE INCLUDES */
-#include <dnscore/input_stream.h>
 
-#ifdef	__cplusplus
-extern "C"
-{
-#endif
+#pragma once
 
-ya_result
-icmtl_input_stream_open(u8* origin, u32 from, u32 to, input_stream* out_is, const char* folder);
+#include <dnscore/message-viewer.h>
 
-void
-icmtl_input_stream_skip_headtail(input_stream* out_is);
-
-#ifdef	__cplusplus
-}
-#endif
-
-#endif	/* _IXFR_INPUT_STREAM_H */
-
-
-    /*    ------------------------------------------------------------    */
+void message_viewer_parse_set(message_viewer *view);
+void message_viewer_parse_init(message_viewer *mv, output_stream *os, u16 view_mode_with);
 
 /** @} */
 
-/*----------------------------------------------------------------------------*/

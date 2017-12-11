@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -68,10 +68,14 @@
 #include <dnscore/logger_channel_stream.h>
 #include <dnscore/config-cmdline.h>
 #include <dnscore/tsig.h>
+#include <dnscore/fdtools.h>
 
 #if HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
 #endif
+
+#define ZDB_JOURNAL_CODE 1
+#include <dnsdb/journal.h>
 
 #include "buildinfo.h"
 
@@ -162,7 +166,7 @@ config_logger_setdefault()
     output_stream stdout_os;
     logger_channel *stdout_channel;
 
-    fd_output_stream_attach(&stdout_os, dup(1));
+    fd_output_stream_attach(&stdout_os, dup_ex(1));
     stdout_channel = logger_channel_alloc();
     logger_channel_stream_open(&stdout_os, FALSE, stdout_channel);
     logger_channel_register(default_channel, stdout_channel);
@@ -238,10 +242,18 @@ yadifad_show_version(u8 level)
 	    osformatln(termout, "%s %s (%s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
 	    break;
 	case 2:
-	    osformatln(termout, "%s %s (released %s, compiled %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE, BUILD_OPTIONS);
+#if HAS_BUILD_TIMESTAMP && defined(__DATE__)
+	    osformatln(termout, "%s %s (released %s, compiled %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, __DATE__, BUILD_OPTIONS);
+#else
+            osformatln(termout, "%s %s (released %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, BUILD_OPTIONS);
+#endif
 	    break;
         case 3:
-	    osformatln(termout, "%s %s (released %s, compiled %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE);
+#if HAS_BUILD_TIMESTAMP && defined(__DATE__)
+	    osformatln(termout, "%s %s (released %s, compiled %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, __DATE__);
+#else
+            osformatln(termout, "%s %s (released %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+#endif
             yadifad_print_authors();
             break;
 	default:
@@ -532,25 +544,28 @@ yadifad_config_finalise()
 ya_result
 config_read_zones()
 {
-    return ERROR; // not implemented
+    return FEATURE_NOT_IMPLEMENTED_ERROR; // not implemented
 }
 
 ya_result
 yadifad_config_update(const char *config_file)
 {
-    //log_try_debug("yadifad_config_update(%s) started", config_file);
+    if(dnscore_shuttingdown())
+    {
+        log_try_debug("yadifad_config_update(%s) cancelled by shutdown", config_file);
+        return STOPPED_BY_APPLICATION_SHUTDOWN;
+    }
+    
+    log_try_debug("yadifad_config_update(%s) started", config_file);
     
     config_error_s cfgerr;
     ya_result return_code = ERROR;
     
-    /// @todo 20130930 edf -- apply ZONE_STATUS_DROP_AFTER_RELOAD
-    
-    /// @todo 20131203 edf -- There MUST be an event that clears a "reloading" status, in order
-    ///       to block smashing the HUPs
-    
     if(database_zone_try_reconfigure_enable())
     {
-        database_set_drop_after_reload();
+        journal_close_unused();
+        
+        database_set_drop_after_reload_for_set(NULL);
 
         config_set_source(CONFIG_SOURCE_FILE);
         
@@ -561,7 +576,7 @@ yadifad_config_update(const char *config_file)
         {
             if(ISOK(return_code =  config_read_section(config_file, &cfgerr, "zone")))
             {                
-                database_do_drop_after_reload();
+                log_info("%s: key and zone sections read", config_file);
             }
             else
             {
@@ -587,18 +602,19 @@ yadifad_config_update(const char *config_file)
             }
         }
         
-        database_zone_reconfigure_disable();
+        database_zone_reconfigure_do_drop_and_disable(ISOK(return_code));
+        
 #if DNSCORE_HAS_DNSSEC_SUPPORT
         dnssec_keystore_reload();
 #endif
     }
     else
     {
-        //log_try_debug("previous reconfigure still running, postponed to run right after");
+        log_try_debug("previous reconfigure still running, postponed to run right after");
         database_zone_postpone_reconfigure_all();
     }
     
-    //log_try_debug("yadifad_config_update(%s): %r", config_file, return_code);
+    log_try_debug("yadifad_config_update(%s): %r", config_file, return_code);
     
     return return_code;
 }
@@ -635,7 +651,7 @@ yadifad_config_update_zone(const char *config_file, const ptr_set *fqdn_set)
 
     if(database_zone_try_reconfigure_enable())
     {
-        database_set_drop_after_reload();
+        database_set_drop_after_reload_for_set(fqdn_set);
 
         config_set_source(CONFIG_SOURCE_FILE);
         
@@ -653,7 +669,7 @@ yadifad_config_update_zone(const char *config_file, const ptr_set *fqdn_set)
             
             if(ISOK(return_code))
             {
-                database_do_drop_after_reload();
+                log_info("%s: key and a some zone sections read", config_file);
             }
             else
             {
@@ -679,12 +695,10 @@ yadifad_config_update_zone(const char *config_file, const ptr_set *fqdn_set)
             }
         }
         
-        database_zone_reconfigure_disable();
+        database_zone_reconfigure_do_drop_and_disable(ISOK(return_code));
     }
     else
     {
-        return_code = SUCCESS;
-        
         log_debug("previous reconfigure still running, postponed to run right after");
         
         if(fqdn_set != NULL)

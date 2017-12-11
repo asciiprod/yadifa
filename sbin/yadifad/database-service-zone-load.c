@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -70,6 +70,8 @@
 #include <dnsdb/xfr_copy.h>
 #include <dnsdb/zdb_icmtl.h>
 
+#include <dnsdb/zdb-zone-maintenance.h>
+
 #if ZDB_HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
 #endif
@@ -81,6 +83,9 @@
 #include "database-service.h"
 #include "ixfr.h"
 #include "zone-source.h"
+#include "notify.h"
+
+#include <dnsdb/zdb_zone_label_iterator.h>
 
 #if HAS_CTRL
 #include "ctrl.h"
@@ -147,6 +152,13 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
     log_debug("database_load_zone_master(%p,%p,%p)", db, zone_desc, zone);
 #endif
     
+    if(dnscore_shuttingdown())
+    {
+        log_debug("zone load: master zone load cancelled by shutdown");
+        zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_PROCESSED, NULL, TRUE);
+        return STOPPED_BY_APPLICATION_SHUTDOWN;
+    }
+    
     s64 zone_load_begin = (s64)timeus();
     
     zone_lock(zone_desc, ZONE_LOCK_LOAD);
@@ -188,6 +200,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
     bool is_drop_before_load;
     bool zr_opened = FALSE;
     bool zone_file_soa_serial_set = FALSE;
+    bool rrsig_push_allowed = FALSE;
     u8 zone_desc_origin[MAX_DOMAIN_LENGTH];
     char file_name[PATH_MAX];
     char zone_desc_file_name[PATH_MAX];
@@ -196,6 +209,9 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
     zone_desc_dnssec_mode = zone_desc->dnssec_mode << ZDB_ZONE_DNSSEC_SHIFT;
 #endif
     is_drop_before_load = zone_is_drop_before_load(zone_desc);
+    
+    rrsig_push_allowed = zone_rrsig_nsupdate_allowed(zone_desc);
+    
     dnsname_copy(zone_desc_origin, zone_desc->origin);
     strncpy(zone_desc_file_name, zone_desc-> file_name, sizeof(zone_desc_file_name));
     
@@ -222,7 +238,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
     {
         if(!zdb_zone_isinvalid(*zone))
         {
-            log_info("zone load: preparing to load '%s'", file_name);
+            log_debug("zone load: preparing to load '%s'", file_name);
 
             // first, get the serial of the zone file
             
@@ -263,7 +279,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
                         return_value = ZDB_READER_ANOTHER_DOMAIN_WAS_EXPECTED;
                     }
 
-                    resource_record_freecontent(&rr);   /// @todo 20150428 edf -- get rid of the os_rdata
+                    resource_record_freecontent(&rr);
                 }
             }
 
@@ -294,7 +310,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
 
             if(!zdb_zone_isinvalid(*zone))
             {
-                return_value = zdb_zone_getserial(*zone, &zone_serial);
+                return_value = zdb_zone_getserial(*zone, &zone_serial); // zone is locked
 
                 zdb_zone_unlock(*zone, ZDB_ZONE_MUTEX_LOAD);
 
@@ -307,7 +323,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
                         s64 zone_load_end = (s64)timeus();
                         double load_time = zone_load_end - zone_load_begin;
                         load_time /= 1000000.;
-                        log_info("zone load: serial of loaded zone %{dnsname} >= serial from file '%s' (%u >= %u): no need to load (%9.6fs)",
+                        log_debug("zone load: %{dnsname}: db serial >= file serial '%s' (%u >= %u): no need to load (%9.6fs)",
                                 zone_desc_origin, file_name, zone_serial, zone_file_soa_serial, load_time);
 
                         return SUCCESS;
@@ -331,7 +347,6 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
             *zone = NULL;
 
             // from this point *zone cannot be read
-
 
             // at this point, the file is about to be loaded.  It is the right time to test the drop-before-load flag
 
@@ -400,6 +415,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
     // the journal MUST be closed, else we way have a situation where
     // the journal is linked to another instance of the zone
     
+#if ZDB_ZONE_HAS_JNL_REFERENCE
     if(zone_desc->loaded_zone != NULL)
     {
         if(zone_desc->loaded_zone->journal != NULL)
@@ -407,6 +423,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
             journal_close(zone_desc->loaded_zone->journal);
         }
     }
+#endif
     
     u16 zone_load_flags = ZDB_ZONE_REPLAY_JOURNAL;
     
@@ -416,22 +433,26 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
     
     return_value = zdb_zone_load(db, &zr, &zone_pointer_out, zone_desc_origin, zone_load_flags);
     zone_reader_close(&zr);
+    
+
 
     /* If the zone load failed for any reason but "loaded already" ... */
 
     if(!(FAIL(return_value) && (return_value != ZDB_READER_ALREADY_LOADED)))
     {
+        zdb_zone_set_rrsig_push_allowed(zone_pointer_out, rrsig_push_allowed);
+        
 #if ZDB_HAS_DNSSEC_SUPPORT
         u32 real_dnssec_mode = ZDB_ZONE_NOSEC;
-        if(zdb_zone_is_nsec3_optout(zone_pointer_out))
+        if(zdb_zone_has_nsec3_optout_chain(zone_pointer_out))
         {
             real_dnssec_mode = ZDB_ZONE_NSEC3_OPTOUT;
         }
-        else if(zdb_zone_is_nsec3(zone_pointer_out))
+        else if(zdb_zone_has_nsec3_chain(zone_pointer_out))
         {
             real_dnssec_mode = ZDB_ZONE_NSEC3;
         }
-        else if(zdb_zone_is_nsec(zone_pointer_out))
+        else if(zdb_zone_has_nsec_chain(zone_pointer_out))
         {
             real_dnssec_mode = ZDB_ZONE_NSEC;
         }
@@ -446,9 +467,9 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
 #endif
         if(!zone_file_soa_serial_set)
         {
-            // there is no need to lock, but this is cheap and it silents some error reporting from zdb_zone_getserial
+            // zone is locked (technically needlessly) else integrity checks would abort
             zdb_zone_lock(zone_pointer_out, ZDB_ZONE_MUTEX_LOAD);
-            return_value = zdb_zone_getserial(zone_pointer_out, &zone_file_soa_serial);
+            return_value = zdb_zone_getserial(zone_pointer_out, &zone_file_soa_serial); // zone is locked
             zdb_zone_unlock(zone_pointer_out, ZDB_ZONE_MUTEX_LOAD);
                     
             if(ISOK(return_value))
@@ -493,14 +514,41 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
             zone_pointer_out->sig_validity_regeneration_seconds = zone_desc->signature.sig_validity_regeneration * SIGNATURE_VALIDITY_REGENERATION_S;
             zone_pointer_out->sig_validity_interval_seconds = zone_desc->signature.sig_validity_interval * SIGNATURE_VALIDITY_INTERVAL_S;
             zone_pointer_out->sig_validity_jitter_seconds = zone_desc->signature.sig_validity_jitter * SIGNATURE_VALIDITY_JITTER_S;
-        
+            
+            static const u8 dnssec_flag_to_maintain_mode[4] = {0, ZDB_ZONE_MAINTAIN_NSEC, ZDB_ZONE_MAINTAIN_NSEC3, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT};
+            
+            u8 maintain_mode = 0;
+            if(zone_desc->dnssec_mode != ZONE_DNSSEC_FL_NOSEC)
+            {
+                maintain_mode = dnssec_flag_to_maintain_mode[zone_desc->dnssec_mode];
+            }
+            else
+            {
+                if(zdb_zone_has_nsec_chain(zone_pointer_out))
+                {
+                    maintain_mode = ZDB_ZONE_MAINTAIN_NSEC;
+                }
+                else if(zdb_zone_has_nsec3_optout_chain(zone_pointer_out))
+                {
+                    maintain_mode = ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT;
+                }
+                else if(zdb_zone_has_nsec3_chain(zone_pointer_out))
+                {
+                    maintain_mode = ZDB_ZONE_MAINTAIN_NSEC3;
+                }
+            }
+            zone_set_maintain_mode(zone_pointer_out, maintain_mode);
+            zdb_zone_set_maintained(zone_pointer_out, TRUE);
+            
             // all keys for the zone have already been loaded into the keystore
             // at this point, these keys have to be compared to the ones in the zone file
-            zdb_zone_double_lock(zone_pointer_out, ZDB_ZONE_MUTEX_RRSIG_UPDATER, ZDB_ZONE_MUTEX_SIMPLEREADER);
-            zdb_zone_update_keystore_keys_from_zone(zone_pointer_out);
-            zdb_zone_double_unlock(zone_pointer_out, ZDB_ZONE_MUTEX_RRSIG_UPDATER, ZDB_ZONE_MUTEX_SIMPLEREADER);
-
-            if(ISOK(return_value = zdb_update_zone_signatures(zone_pointer_out, MAX_U32, FALSE)) || (return_value == ZDB_ERROR_ZONE_NO_ZSK_PRIVATE_KEY_FILE))
+            zdb_zone_double_lock(zone_pointer_out, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+            zdb_zone_update_keystore_keys_from_zone(zone_pointer_out, ZDB_ZONE_MUTEX_DYNUPDATE);
+            zdb_zone_double_unlock(zone_pointer_out, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+            
+            if(ISOK(return_value = zdb_zone_maintenance(zone_pointer_out)) ||
+                    (return_value == ZDB_ERROR_ZONE_NO_ACTIVE_DNSKEY_FOUND) ||
+                    (return_value == ZDB_ERROR_ZONE_NO_ZSK_PRIVATE_KEY_FILE))
             {
                 u32 now = time(NULL);
 
@@ -512,24 +560,21 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
                 s64 zone_load_end = (s64)timeus();
                 double load_time = zone_load_end - zone_load_begin;
                 load_time /= 1000000.;
-                log_info("zone load: '%s' loaded (%9.6fs)", zone_desc->domain, load_time);
-
-                zone_unlock(zone_desc, ZONE_LOCK_LOAD);
-
-                //database_replace_zone(g_config->database, zone_desc, zone_pointer_out);
-
-
-                return_value = SUCCESS;
-            }
-            else if(return_value == ZDB_ERROR_ZONE_NO_ACTIVE_DNSKEY_FOUND)
-            {
-                s64 zone_load_end = (s64)timeus();
-                double load_time = zone_load_end - zone_load_begin;
-                load_time /= 1000000.;
-                log_info("zone load: '%s' loaded (%9.6fs) but signatures could not be updated because there are no usable keys available", zone_desc->domain, load_time);
+                
+                if(ISOK(return_value))
+                {
+                    log_info("zone load: '%s' loaded (%9.6fs)", zone_desc->domain, load_time);
+                }
+                else
+                {
+                    log_info("zone load: '%s' loaded (%9.6fs) but signatures could not be updated because there are no usable keys available (%r)",
+                            zone_desc->domain, load_time, return_value);
+                }
 
                 zone_unlock(zone_desc, ZONE_LOCK_LOAD);
                 
+                notify_slaves(zone_desc->origin);
+
                 return_value = SUCCESS;
             }
             else
@@ -564,7 +609,14 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
         }
         else
         {
-            log_err("zone load: '%s' not loaded: %r (%9.6fs)", zone_desc->domain, return_value, load_time);
+            if(return_value != STOPPED_BY_APPLICATION_SHUTDOWN)
+            {
+                log_err("zone load: '%s' not loaded: %r (%9.6fs)", zone_desc->domain, return_value, load_time);
+            }
+            else
+            {
+                log_debug("zone load: '%s' load cancelled by shutdown", zone_desc->domain, return_value, load_time);
+            }
         }
         
         zone_pointer_out = NULL;
@@ -609,14 +661,10 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
     memset(&current_serial,0x5a,sizeof(current_serial));
 #endif
     
-
-    
     if(FAIL(return_value = rr_soa_get_serial(soa_rdata, soa_rdata_size, &current_serial)))
     {
         return return_value;
     }
-    
-
     
     if(ISOK(return_value = ixfr_start_query(zone_desc_masters, zone_desc_origin, ttl, soa_rdata, soa_rdata_size, &is, &os, &ixfr_query)))
     {
@@ -865,6 +913,13 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
     log_debug("database_load_zone_slave(%p,%p,%p)", db, zone_desc, zone);
 #endif
     
+    if(dnscore_shuttingdown())
+    {
+        log_debug("zone load: slave zone load cancelled by shutdown");
+        zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_PROCESSED, NULL, TRUE);
+        return STOPPED_BY_APPLICATION_SHUTDOWN;
+    }
+    
     zone_lock(zone_desc, ZONE_LOCK_LOAD);
     
     if(zone_desc->type != ZT_SLAVE)
@@ -940,7 +995,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
                 u32 current_serial;
 
                 zdb_zone_lock(current_zone, ZDB_ZONE_MUTEX_LOAD);
-                return_value = zdb_zone_getserial(current_zone, &current_serial);
+                return_value = zdb_zone_getserial(current_zone, &current_serial); // zone is locked
                 zdb_zone_unlock(current_zone, ZDB_ZONE_MUTEX_LOAD);
 
                 if(ISOK(return_value))
@@ -1106,7 +1161,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
             u16 rdata_buffer_size = MAX_SOA_RDATA_LENGTH;
             u8  rdata[MAX_SOA_RDATA_LENGTH];
             
-            if(FAIL(return_value = journal_last_soa(zone_desc_origin, g_config->xfr_path, &zone_journal_serial, &ttl, rdata, &rdata_buffer_size)))
+            if(FAIL(return_value = journal_last_soa(zone_desc_origin, &zone_journal_serial, &ttl, rdata, &rdata_buffer_size)))
             {
                 if(return_value == ZDB_ERROR_ICMTL_NOTFOUND)
                 {
@@ -1256,6 +1311,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
             // the journal MUST be closed, else we way have a situation where
             // the journal is linked to another instance of the zone
 
+#if ZDB_ZONE_HAS_JNL_REFERENCE
             if(zone_desc->loaded_zone != NULL)
             {
                 if(zone_desc->loaded_zone->journal != NULL)
@@ -1263,6 +1319,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
                     journal_close(zone_desc->loaded_zone->journal);
                 }
             }
+#endif
 
             return_value = zdb_zone_load(db, &zr, &zone_pointer_out, zone_desc_origin, ZDB_ZONE_REPLAY_JOURNAL|ZDB_ZONE_IS_SLAVE);
 
@@ -1274,14 +1331,16 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
             
             zone_lock(zone_desc, ZONE_LOCK_LOAD);
             
-            if(best_source == &axfr_source)
+            // if the source base serial is different from the source serial, then the journal has been played and the zone is "dirty"
+            
+            if((best_source->base_serial != best_source->serial) || (best_source == &axfr_source))
             {
                 // if we didn't load the zone file, so mark it so a dump will actually dump its content into a text zone file
-                zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
+                zone_set_status(zone_desc, ZONE_STATUS_MODIFIED);
             }
             if(zone_source_has_flags(best_source, ZONE_SOURCE_TEMPLATE))
             {
-                zone_desc->status_flags |= ZONE_STATUS_TEMPLATE_SOURCE_FILE;
+                zone_set_status(zone_desc, ZONE_STATUS_TEMPLATE_SOURCE_FILE);
             }
             
             zone_desc->refresh.refreshed_time = now;
@@ -1308,10 +1367,10 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
                 zone_pointer_out->sig_validity_interval_seconds = MAX_S32;/*zone->sig_validity_interval * SIGNATURE_VALIDITY_INTERVAL_S */;
                 zone_pointer_out->sig_validity_jitter_seconds = 0;/*zone->sig_validity_jitter * SIGNATURE_VALIDITY_JITTER_S */;
 #endif
+                zone_desc->stored_serial = best_source->base_serial;
+                
                 *zone = zone_pointer_out;
-                
                 zone_unlock(zone_desc, ZONE_LOCK_LOAD);
-                
                 host_address_delete_list(zone_desc_masters);
                 
                 if(current_zone != NULL)
@@ -1345,12 +1404,46 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
                     case UNABLE_TO_COMPLETE_FULL_READ:
                     {
                         log_err("zone load: %{dnsname}: the zone file or the journal are likely corrupted: %r", zone_desc_origin, return_value);
+                        
+                        if(best_source == &file_source)
+                        {
+                            log_info("zone load: %{dnsname}: deleting local copy of the zone (%s)", zone_desc_origin, file_name);
+                            unlink(file_name);
+                            log_info("zone load: %{dnsname}: deleting journal", zone_desc_origin);
+                            journal_truncate(zone_desc_origin);
+                            file_opened = FALSE;
+                        }
+                        else if(best_source == &axfr_source)
+                        {
+                            log_info("zone load: %{dnsname}: deleting local image of the zone", zone_desc_origin);
+                            xfr_delete_axfr(zone_desc_origin);
+                            log_info("zone load: %{dnsname}: deleting journal", zone_desc_origin);
+                            journal_truncate(zone_desc_origin);
+                        }
+                        
                         best_source = &master_source;
                         break;
                     }
                     default:
                     {
                         log_err("zone load: %{dnsname}: an error occurred while loading the zone or journal: %r", zone_desc_origin, return_value);
+                        
+                        if(best_source == &file_source)
+                        {
+                            log_info("zone load: %{dnsname}: deleting local copy of the zone (%s)", zone_desc_origin, file_name);
+                            unlink(file_name);
+                            log_info("zone load: %{dnsname}: deleting journal", zone_desc_origin);
+                            journal_truncate(zone_desc_origin);
+                            file_opened = FALSE;
+                        }
+                        else if(best_source == &axfr_source)
+                        {
+                            log_info("zone load: %{dnsname}: deleting local image of the zone", zone_desc_origin);
+                            xfr_delete_axfr(zone_desc_origin);
+                            log_info("zone load: %{dnsname}: deleting journal", zone_desc_origin);
+                            journal_truncate(zone_desc_origin);
+                        }
+                        
                         best_source = &master_source;
                         break;
                     }
@@ -1513,17 +1606,18 @@ database_service_zone_load_thread(void *parms)
     
     zone_lock(zone_desc, ZONE_LOCK_LOAD);
     
-    if((zone_desc->status_flags & must_be_off) != 0)
+    if((zone_get_status(zone_desc) & must_be_off) != 0)
     {
-        log_err("zone load: conflicting status: %08x instead of 0", (zone_desc->status_flags & must_be_off));
+        log_err("zone load: conflicting status: %08x instead of 0", (zone_get_status(zone_desc) & must_be_off));
     
         database_zone_load_parms_free(database_zone_load_parms);
-        zone_release(zone_desc);
         
+        database_fire_zone_processed(zone_desc);
+        zone_release(zone_desc);
         return NULL;
     }
     
-    zone_desc->status_flags |= ZONE_STATUS_LOADING;
+    zone_set_status(zone_desc, ZONE_STATUS_LOADING);
     
     zone_unlock(zone_desc, ZONE_LOCK_LOAD);
     
@@ -1587,11 +1681,18 @@ database_service_zone_load_thread(void *parms)
     {
         if(!((return_code == ZRE_NO_VALID_FILE_FOUND) && (zone_desc->type == ZT_SLAVE)))
         {
-            log_err("zone load: error loading %{dnsname}: %r", zone_desc->origin, return_code);
+            if(return_code != STOPPED_BY_APPLICATION_SHUTDOWN)
+            {
+                log_err("zone load: %{dnsname}: error loading: %r", zone_desc->origin, return_code);
+            }
+            else
+            {
+                log_debug("zone load: %{dnsname}: loading cancelled by shutdown", zone_desc->origin);
+            }
         }
         else
         {
-            log_notice("zone load: slave zone %{dnsname} requires download from the master", zone_desc->origin);
+            log_notice("zone load: %{dnsname}: slave zone requires download from the master", zone_desc->origin);
         }
         
         if(zone != NULL)
@@ -1601,10 +1702,9 @@ database_service_zone_load_thread(void *parms)
         
         database_fire_zone_loaded(zone_desc, NULL, return_code);
     }
-
     
     zone_lock(zone_desc, ZONE_LOCK_LOAD);
-    zone_desc->status_flags &= ~(ZONE_STATUS_LOAD|ZONE_STATUS_LOADING|ZONE_STATUS_DOWNLOADED|ZONE_STATUS_PROCESSING);
+    zone_clear_status(zone_desc, ZONE_STATUS_LOAD|ZONE_STATUS_LOADING|ZONE_STATUS_DOWNLOADED|ZONE_STATUS_PROCESSING);
     zone_unlock(zone_desc, ZONE_LOCK_LOAD);
     
     database_zone_load_parms_free(database_zone_load_parms);
@@ -1633,9 +1733,7 @@ database_service_zone_load(zone_desc_s *zone_desc)
     }
     
     const u8 *origin = zone_desc->origin;
-    
-    log_info("zone load: %{dnsname}", origin);
-                    
+                        
     /*
      * Invalidate the zone
      * Empty the current zone if any
@@ -1647,7 +1745,7 @@ database_service_zone_load(zone_desc_s *zone_desc)
     
     // locks the descriptor with the loader identity
     
-    if(zone_desc->status_flags & (ZONE_STATUS_LOAD|ZONE_STATUS_LOADING))
+    if(zone_get_status(zone_desc) & (ZONE_STATUS_LOAD|ZONE_STATUS_LOADING))
     {
         // already loading
         
@@ -1676,8 +1774,8 @@ database_service_zone_load(zone_desc_s *zone_desc)
 
 
         
-        zone_desc->status_flags |= ZONE_STATUS_LOAD;
-        zone_desc->status_flags &= ~ZONE_STATUS_STARTING_UP;
+        zone_set_status(zone_desc, ZONE_STATUS_LOAD);
+        zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP);
         
         zone_acquire(zone_desc);
         database_service_zone_load_parms_s *database_zone_load_parms = database_zone_load_parms_alloc(db, zone_desc, database_load_zone_master);
@@ -1698,8 +1796,8 @@ database_service_zone_load(zone_desc_s *zone_desc)
          * 
          */
         
-        zone_desc->status_flags |= ZONE_STATUS_LOAD;
-        zone_desc->status_flags &= ~ZONE_STATUS_STARTING_UP;
+        zone_set_status(zone_desc, ZONE_STATUS_LOAD);
+        zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP);
         
         zone_acquire(zone_desc);
         database_service_zone_load_parms_s *database_zone_load_parms = database_zone_load_parms_alloc(db, zone_desc, database_load_zone_slave);
@@ -1711,7 +1809,7 @@ database_service_zone_load(zone_desc_s *zone_desc)
 
         log_err("zone load: unknown zone type");
         
-        zone_desc->status_flags &= ~(ZONE_STATUS_LOAD|ZONE_STATUS_LOADING|ZONE_STATUS_DOWNLOADED|ZONE_STATUS_PROCESSING);
+        zone_clear_status(zone_desc, ZONE_STATUS_LOAD|ZONE_STATUS_LOADING|ZONE_STATUS_DOWNLOADED|ZONE_STATUS_PROCESSING);
     }
     
     log_debug1("database_service_zone_load: unlocking zone '%{dnsname}' for loading", origin);

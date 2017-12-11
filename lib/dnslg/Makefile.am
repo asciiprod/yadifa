@@ -28,6 +28,19 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnslg/Makefile.am $
+#
+#       Last Update:
+#               $Date: 2017-12-05 08:55:57 +0100 (Tue, 05 Dec 2017) $
+#
+#               $Revision: 7503 $
+#
+#       Purpose:
+#               YADIFA dnslg Makefile.am script
+#
+################################################################################
 
 srcdir =        @srcdir@
 libdir =        @libdir@
@@ -63,7 +76,7 @@ libdnslg_la_SOURCES = \
 		      src/resolv-conf.c \
 		      src/resolv.c
 
-libdnslg_la_LDFLAGS = -version-info 2:0:0
+libdnslg_la_LDFLAGS = -version-info 6:3:0
 
 include ../../mk/common-settings.mk
 
@@ -74,13 +87,18 @@ all: REVISION
 REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
-src/config-resolver.c: $(FEATURES)
+src/config-resolver.c: features
 
 features: $(FEATURES)
 
 $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
 VP=DNSLG
+if HAS_TSIG_SUPPORT
+	echo "#define DNSLG_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSLG_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
+endif
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \
 		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \

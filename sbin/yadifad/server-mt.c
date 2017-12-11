@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 
 /**
  *  @defgroup server Server
@@ -55,7 +55,24 @@
 
 #define SERVER_ST_C_
 
+// keep this order -->
+
 #include "server-config.h"
+
+#ifndef __USE_GNU
+#define __USE_GNU 1
+#endif
+#define _GNU_SOURCE 1
+#include <sched.h>
+
+#if defined __FreeBSD__
+#include <sys/param.h>
+#include <sys/cpuset.h>
+typedef cpuset_t cpu_set_t;
+#endif
+
+// <-- keep this order
+
 #include "config.h"
 
 #include <dnscore/logger.h>
@@ -74,6 +91,10 @@
 #define ZDB_JOURNAL_CODE 1
 
 #include <dnsdb/journal.h>
+#endif
+
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+#include "dnsdb/zdb-zone-lock-monitor.h"
 #endif
 
 extern logger_handle *g_server_logger;
@@ -114,10 +135,6 @@ extern logger_handle *g_server_logger;
 #endif
 
 #define MSGHDR_TAG 0x52444847534d
-
-#ifdef HAS_MIRROR_SUPPORT
-#define DUMB_MIRROR 1
-#endif
 
 #if HAS_MESSAGES_SUPPORT
 #define UDP_USE_MESSAGES 1
@@ -540,7 +557,9 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
             } // if message process succeeded
             else // an error occurred : no query to be done at all
             {
+#ifdef DEBUG
                 return_code = message_process_query(mesg);
+#endif
                 
                 log_warn("query (%04hx) [%02x|%02x] error %i (%r) (%{sockaddrip})",
                          ntohs(MESSAGE_ID(mesg->buffer)),
@@ -845,8 +864,6 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
     {
         /** @warning server_st_process_udp needs to be modified */
         log_err("short byte count sent (%i instead of %i)", sent, mesg->send_length);
-
-        /*return ERROR*/;
     }
 #else
     log_debug("server_mt_process_udp: drop all");
@@ -882,6 +899,17 @@ server_mt_udp_messages_thread(void* parm)
     st->id = pthread_self();
 
     /*    ------------------------------------------------------------    */
+
+#if HAS_PTHREAD_SETAFFINITY_NP
+    cpu_set_t mycpu;
+    CPU_ZERO(&mycpu);
+    
+    int affinity_with = g_config->thread_affinity_base + st->idx * g_config->thread_affinity_multiplier;
+    log_info("server-mt: setting affinity with virtual cpu %i", affinity_with);
+    CPU_SET(affinity_with, &mycpu);
+    
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mycpu);
+#endif
 
     /* Clear and initialize mesg */
     ZEROMEMORY(st->udp_mesg, sizeof(message_data));
@@ -1026,7 +1054,7 @@ server_mt_query_loop()
     
     extern server_context_s server_context;
     
-    struct thread_pool_s *server_udp_thread_pool = thread_pool_init_ex(intf_count * reader_by_fd, 1, "server-udp-tp");
+    struct thread_pool_s *server_udp_thread_pool = thread_pool_init_ex(intf_count * reader_by_fd, 1, "svrudpmt");
     
     for(int intf_idx = 0; intf_idx < intf_count; ++intf_idx)
     {
@@ -1180,7 +1208,10 @@ server_mt_query_loop()
         rrl_cull();
 #endif
         
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_log();
+#endif
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
         zdb_zone_lock_set_monitor();
 #endif
         

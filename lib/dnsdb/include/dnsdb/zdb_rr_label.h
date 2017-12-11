@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup records_labels Internal functions for the database: zoned resource records label.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -91,7 +91,7 @@ zdb_rr_label* zdb_rr_label_find_exact(zdb_rr_label* apex,dnslabel_vector_referen
 /* NOT USED (YET) */
 zdb_rr_label* zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index);
 
-zdb_rr_label* zdb_rr_label_find_from_name(zdb_zone* apex, const u8 *fqdn);
+zdb_rr_label* zdb_rr_label_find_from_name(zdb_zone* zone, const u8 *fqdn);
 
 zdb_rr_label*
 zdb_rr_label_stack_find(zdb_rr_label* apex, const_dnslabel_stack_reference sections, s32 pos, s32 index);
@@ -203,6 +203,18 @@ ya_result zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference p
 ya_result zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path, s32 path_index, u16 type, const zdb_ttlrdata* ttlrdata);
 
 /**
+ * For all tool to browse all labels under this one
+ * 
+ * @param rr_label
+ * @param type
+ * @return 
+ */
+
+typedef ya_result zdb_rr_label_forall_cb(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, void *data);
+
+ya_result zdb_rr_label_forall_children_of_fqdn(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, zdb_rr_label_forall_cb *callback, void *data);
+
+/**
  * @brief Deletes an EMPTY label
  *
  * Deletes an EMPTY label an all it's EMPTY parents
@@ -223,10 +235,9 @@ static inline zdb_packed_ttlrdata* zdb_rr_label_get_rrset(const zdb_rr_label *rr
 
 static inline bool zdb_rr_label_has_rrset(const zdb_rr_label *rr_label, u16 type)
 {
-    bool ret = (zdb_rr_label_get_rrset(rr_label, type) != NULL);
+    bool ret = (zdb_rr_label_get_rrset(rr_label, type) != NULL); // zone is locked
     return ret;
 }
-
 
 /**
  * @brief Destroys a zone label and its contents
@@ -251,6 +262,14 @@ static inline bool zdb_rr_label_is_glue(zdb_rr_label* label)
 /* 2 USES */
 #define RR_LABEL_RELEVANT(rr_label_)   ((dictionary_notempty(&(rr_label_)->sub))||(btree_notempty((rr_label_)->resource_record_set))||(rr_label_->nsec.dnssec != NULL))
 
+static inline bool zdb_rr_label_has_children(zdb_rr_label *label) {return dictionary_notempty(&label->sub);}
+static inline bool zdb_rr_label_has_records(zdb_rr_label *label) {return btree_notempty(label->resource_record_set);}
+static inline bool zdb_rr_label_has_dnssec_extension(zdb_rr_label *label) {return label->nsec.dnssec != NULL;}
+static inline bool zdb_rr_label_is_empty_terminal(zdb_rr_label *label)
+{
+    return !(zdb_rr_label_has_children(label) || zdb_rr_label_has_records(label));
+}
+
 /* label is only alive because of NSEC3 */
 #define RR_LABEL_HASSUB(rr_label_)      (dictionary_notempty(&(rr_label_)->sub))
 #define RR_LABEL_HASSUBORREC(rr_label_)((dictionary_notempty(&(rr_label_)->sub))||(btree_notempty((rr_label_)->resource_record_set)))
@@ -268,21 +287,9 @@ static inline bool zdb_rr_label_is_glue(zdb_rr_label* label)
 
 #endif
 
-/* 0 USES */
-
-static inline bool zdb_rr_label_has_records(const zdb_rr_label *rr_label)
-{
-    bool ret = btree_notempty(rr_label->resource_record_set);
-    return ret;
-}
-
-#ifdef DEBUG
-
 void zdb_rr_label_print_indented(const zdb_rr_label* rr_label, output_stream *os, int indent);
 
 void zdb_rr_label_print(const zdb_rr_label* zone_label, output_stream *os);
-
-#endif
 
 #ifdef	__cplusplus
 }

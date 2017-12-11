@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup
  *  @ingroup dnsdb
  *  @brief
@@ -56,6 +56,8 @@
 
 #include <dnscore/input_stream.h>
 #include <dnscore/dns_resource_record.h>
+#include <dnscore/list-dl.h>
+
 #include <dnsdb/zdb_types.h>
 
 #ifdef	__cplusplus
@@ -117,6 +119,8 @@ typedef ya_result journal_get_serial_range_method(journal *jh, u32 *serial_start
 
 typedef ya_result journal_truncate_to_size_method(journal *jh, u32 size_);
 typedef ya_result journal_truncate_to_serial_method(journal *jh, u32 serial_);
+typedef ya_result journal_reopen_method(journal *jh);
+typedef void journal_flush_method(journal *jh);
 typedef ya_result journal_close_method(journal *jh);
 typedef ya_result journal_get_domain_method(journal *jh, u8 *out_domain);
 typedef void journal_destroy_method(journal *jh);
@@ -127,6 +131,8 @@ struct journal_vtbl
 {
     journal_get_format_name_method           *get_format_name;          // returns a const char*
     journal_get_format_version_method        *get_format_version;       // returns the version
+    journal_reopen_method                    *reopen;                   // opens the file, if it has temporarily been closed
+    journal_flush_method                     *flush;                    // flushes to storage
     journal_close_method                     *close;                    // closes the file
     journal_append_ixfr_stream_method        *append_ixfr_stream;       // appends IXFR (without the first/last SOA) to the journal
     journal_get_ixfr_stream_at_serial_method *get_ixfr_stream_at_serial;// returns a stream starting at serial SN    
@@ -146,9 +152,10 @@ struct journal
 {
     volatile struct journal_vtbl *vtbl;
     volatile zdb_zone            *zone;
-    volatile struct journal      *next;
-    volatile struct journal      *prev;
-    volatile bool                  mru;
+    volatile list_dl_node_s   mru_node;
+    volatile int                    rc;
+    volatile unsigned int _forget:1,_mru:1;
+    
     /* The journal is not like a stream, it's a full standalone entity always returned as a pointer.
      * So the handler can do whatever it wants after "mru"
      */
@@ -182,18 +189,21 @@ struct journal
  * @return 
  */
 
-ya_result journal_open(journal **jhp, zdb_zone *zone, bool create);
+ya_result journal_acquire_from_fqdn_ex(journal **jhp, const u8 *origin, bool create);
+ya_result journal_acquire_from_fqdn(journal **jhp, const u8 *origin);
+ya_result journal_acquire_from_zone_ex(journal **jhp, zdb_zone *zone, bool create);
+ya_result journal_acquire_from_zone(journal **jhp, zdb_zone *zone);
+void journal_acquire(journal *jh);
 
 /**
  * 
- * Closes a journal (decrement the reference count and delete if zero)
- * If no reference exists, remove the journal
+ * Decrement the reference count and potentially closes it if it reaches 0
  * 
  * @param jh
  * @return 
  */
 
-void journal_close(journal *jh);
+void journal_release(journal *jh);
 
 /**
  * Returns the last available serial of a journal for a zone.
@@ -201,7 +211,9 @@ void journal_close(journal *jh);
  * This function should NOT be used for a loaded zone.
  */
 
-ya_result journal_last_serial(const u8 *origin, const char *workingdir, u32 *serialp);
+ya_result journal_last_serial(const u8 *origin, u32 *serialp);
+
+ya_result journal_serial_range(const u8 *origin, u32 *serialfromp, u32 *serialtop);
 
 /*
  * Empties/deletes a journal
@@ -224,7 +236,14 @@ ya_result journal_truncate(const u8 *origin);
  * @return an error code
  */
 
-ya_result journal_last_soa(const u8 *origin, const char *workingdir, u32 *serial, u32 *ttl, u8 *last_soa_rdata, u16 *last_soa_rdata_size);
+ya_result journal_last_soa(const u8 *origin, u32 *serial, u32 *ttl, u8 *last_soa_rdata, u16 *last_soa_rdata_size);
+
+/**
+ * Flushes, closes and destroys all currently unused journals (from memory)
+ */
+
+void journal_close_unused();
+
 
 /**
  * Logs the current status of the journaling system

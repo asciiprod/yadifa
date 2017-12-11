@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -66,11 +66,13 @@
 
 #define MODULE_MSG_HANDLE g_system_logger
 
-#ifndef OPENSSL_VERSION_NUMBER
-#error "OPENSSL_VERSION_NUMBER not defined"
+#define KEYDSA_TAG   0x5f41534459454b
+
+#ifndef SSL_API
+#error "SSL_API not defined"
 #endif
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
 
 /*
  * Backward-compatible interface for 0.9.x
@@ -198,7 +200,7 @@ static const struct dnskey_field_access DSA_field_access[] =
     {"Base(g)", offsetof(struct dnskey_dsa,g), STRUCTDESCRIPTOR_BN},
     {"Private_value(x)", offsetof(struct dnskey_dsa,priv_key), STRUCTDESCRIPTOR_BN},
     {"Public_value(y)", offsetof(struct dnskey_dsa,pub_key), STRUCTDESCRIPTOR_BN},
-    {NULL, 0, 0}
+    {"", 0, 0}
 };
 
 static int
@@ -226,7 +228,7 @@ dnskey_dsa_genkey(u32 size)
     int err;
     DSA* dsa;
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
     dsa = DSA_generate_parameters(size, NULL,0, NULL, NULL, NULL, NULL);
 #else
     dsa = DSA_new();
@@ -341,12 +343,10 @@ dnskey_dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
     
     u8 t = *signature++;
     
-#ifdef DEBUG
     if(t != 8)
     {
-        log_debug("DSA T!=8 (T = %i)", t);
+        log_warn("DSA T!=8");
     }
-#endif
     
     signature_len--;        
     signature_len >>= 1;
@@ -483,6 +483,7 @@ dnskey_dsa_public_store(DSA* dsa, u8* output_buffer)
 
     if((abs(p_n - g_n) > 2) || (abs(p_n - y_n) > 2)) /* sometimes, there is one byte difference in storage */
     {
+        /// @todo 20161107 edf -- the caller should be aware of this and retry the generation (well before this one is called)
         return 0;
     }
     
@@ -770,7 +771,7 @@ dnskey_dsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
        (ydsa->g == NULL) ||
        (ydsa->pub_key == NULL))
     {
-        return ERROR;
+        return DNSSEC_ERROR_INCOMPLETEKEY;
     }
     
     int nid;
@@ -834,7 +835,7 @@ dnskey_dsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
     }
     else
     {
-        return ERROR;
+        return DNSSEC_ERROR_INCOMPLETEKEY;
     }
 }
 
@@ -862,7 +863,7 @@ void
 dnskey_dsa_parse_init(dnskey_field_parser *fp)
 {
     struct dnskey_dsa *ydsa;
-    ZALLOC_OR_DIE(struct dnskey_dsa *, ydsa, struct dnskey_dsa, GENERIC_TAG);
+    ZALLOC_OR_DIE(struct dnskey_dsa *, ydsa, struct dnskey_dsa, KEYDSA_TAG);
     ZEROMEMORY(ydsa, sizeof(struct dnskey_dsa));
     fp->data = ydsa;
     fp->vtbl = &dsa_field_parser_vtbl;
@@ -947,8 +948,6 @@ dnskey_dsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dn
 
     return return_value;
 }
-
-/*    ------------------------------------------------------------    */
 
 /** @} */
 

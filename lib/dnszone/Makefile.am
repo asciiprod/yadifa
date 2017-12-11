@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA dnszone Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnszone/Makefile.am $
+#
+#       $Date: 2017-12-05 08:55:57 +0100 (Tue, 05 Dec 2017) $
+#
+#       $Revision: 7503 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 srcdir =        @srcdir@
 libdir =	@libdir@
@@ -61,7 +75,7 @@ pkginclude_HEADERS = \
 		     $(I)/zone_axfr_reader.h \
 		     $(I)/zone_file_reader.h
 
-libdnszone_la_LDFLAGS = -version-info 2:0:0
+libdnszone_la_LDFLAGS = -version-info 6:3:0
 
 include ../../mk/common-settings.mk
 
@@ -72,7 +86,7 @@ all: REVISION
 REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
-src/dnszone.c: $(FEATURES)
+src/dnszone.c: features
 
 features: $(FEATURES)
 

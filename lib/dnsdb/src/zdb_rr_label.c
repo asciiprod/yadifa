@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup records_labels Internal functions for the database: zoned resource records label.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -52,12 +52,99 @@
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/zdb-zone-lock.h"
-
-#include "dnsdb/zdb_listener.h"
+#include "dnsdb/nsec3_types.h"
 
 #include "dnsdb/dictionary.h"
 
+#include <dnscore/logger.h>
+
+void nsec3_zone_label_detach(zdb_rr_label *label);
+void nsec_zone_label_detach(zdb_rr_label *label);
+
+extern logger_handle* g_database_logger;
+#define MODULE_MSG_HANDLE g_database_logger
+
 static void zdb_rr_label_destroy_callback(dictionary_node* rr_label_record, void* arg);
+
+static void zdb_rr_label_clear_underdelegation_under(zdb_rr_label *rr_label)
+{
+    dictionary_iterator iter;
+    dictionary_iterator_init(&rr_label->sub, &iter);
+    while(dictionary_iterator_hasnext(&iter))
+    {
+        zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
+
+        (*sub_labelp)->flags &= ~ZDB_RR_LABEL_UNDERDELEGATION;
+        
+        zdb_rr_label_clear_underdelegation_under(*sub_labelp);
+    }
+}
+
+//typedef ya_result zdb_rr_label_forall_cb(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, void *data);
+
+struct zdb_rr_label_forall_children_of_fqdn_recurse_parm
+{
+    zdb_rr_label_forall_cb *callback;
+    void *data;
+    u8 *fqdn;
+    u8 fqdn_storage[256];
+};
+
+static ya_result
+zdb_rr_label_forall_children_of_fqdn_recurse(zdb_rr_label *rr_label, struct zdb_rr_label_forall_children_of_fqdn_recurse_parm* parms)
+{
+    ya_result ret = 0;
+    
+    dictionary_iterator iter;
+    dictionary_iterator_init(&rr_label->sub, &iter);
+    while(dictionary_iterator_hasnext(&iter))
+    {
+        zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
+        
+        u8* sub_fqdn = parms->fqdn;
+        sub_fqdn -= (*sub_labelp)->name[0] + 1;
+        if(sub_fqdn < &parms->fqdn_storage[0])
+        {
+            break;
+        }
+        
+        memcpy(sub_fqdn, (*sub_labelp)->name, (*sub_labelp)->name[0] + 1);
+                
+        parms->callback(*sub_labelp, sub_fqdn, parms->data);
+        
+        if(zdb_rr_label_has_children(rr_label))
+        {
+            parms->fqdn = sub_fqdn;
+            
+            ret += zdb_rr_label_forall_children_of_fqdn_recurse(*sub_labelp, parms);
+            
+            parms->fqdn += sub_fqdn[0] + 1;
+        }
+    }
+    
+    return ret;
+}
+
+ya_result
+zdb_rr_label_forall_children_of_fqdn(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, zdb_rr_label_forall_cb *callback, void *data)
+{
+    if(!zdb_rr_label_has_children(rr_label))
+    {
+        return 0;
+    }
+    
+    struct zdb_rr_label_forall_children_of_fqdn_recurse_parm parms;
+    parms.callback = callback;
+    parms.data = data;
+    
+    int len = dnsname_len(rr_label_fqdn);
+    parms.fqdn = &parms.fqdn_storage[256 - len];
+    memcpy(parms.fqdn, rr_label_fqdn, len);
+    
+    ya_result ret = zdb_rr_label_forall_children_of_fqdn_recurse(rr_label, &parms);
+    
+    return ret;
+}
 
 /**
  *  NSEC3: Zone possible
@@ -604,7 +691,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
 
     /* We are at the right place for the record */
 
-#if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
     zdb_listener_notify_remove_type(args->zone, args->sections[args->top], &rr_label->resource_record_set, args->type);
 #endif
 
@@ -612,15 +699,23 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
 
     if(ISOK(err = zdb_record_delete(&rr_label->resource_record_set, args->type))) /* FB done */
     {
-        if(RR_LABEL_RELEVANT(rr_label))
+        if(!zdb_rr_label_is_empty_terminal(rr_label))
         {
-            /* If the type was NS, clear the delegation flag */
+            /* If the type was XXXX and we deleted the last one the flag may change.
+             * NS => not a delegation anymore
+             * CNAME => no cname anymore
+             * ANY => nothing anymore (and should not be relevant anymore either ...)
+             */
 
             u16 clear_mask = 0;
             switch(args->type)
             {
                 case TYPE_NS:
                     clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
+                    
+                    // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one                        
+                    zdb_rr_label_clear_underdelegation_under(rr_label);
+                        
                     break;
                 case TYPE_CNAME:
                     clear_mask = ~ZDB_RR_LABEL_HASCNAME; // will clear "has cname"
@@ -641,9 +736,32 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
 
             return COLLECTION_PROCESS_STOP;
         }
+        else
+        {
+            if(zdb_rr_label_has_dnssec_extension(rr_label))
+            {
+                // remove the extension
+                
+                if(zdb_rr_label_nsec3any_linked(rr_label))
+                {
+                    // detach then destroy the ext
+                    nsec3_zone_label_detach(rr_label);
+                }
+                else if(zdb_rr_label_nsec_linked(rr_label))
+                {
+                    nsec_zone_label_detach(rr_label);
+                }
+#ifdef DEBUG
+                else
+                {
+                    yassert(rr_label->nsec.dnssec == NULL);
+                }
+#endif
+            }
+        }
 
         /* NOTE: the 'detach' is made by destroy : do not touch to the "next" field */
-        /* NOTE: the freee of the node is made by destroy : do not do it */
+        /* NOTE: the free of the node is made by destroy : do not do it */
 
         /* dictionary destroy will take every item in the dictionary and
          * iterate through it calling the passed function.
@@ -827,11 +945,11 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
          * @NOTE delete_return_code can be either SUCCESS_STILL_RECORDS or SUCCESS_LAST_RECORD
          */
 
-#if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
         zdb_listener_notify_remove_record(args->zone, args->sections[args->top], args->type, args->ttlrdata);
 #endif
 
-        if(RR_LABEL_RELEVANT(rr_label))
+        if(!zdb_rr_label_is_empty_terminal(rr_label))
         {
             /* If the type was XXXX and we deleted the last one the flag may change.
              * NS => not a delegation anymore
@@ -846,6 +964,10 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
                 {
                     case TYPE_NS:
                         clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
+                        
+                        // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one                        
+                        zdb_rr_label_clear_underdelegation_under(rr_label);
+                        
                         break;
                     case TYPE_CNAME:
                         clear_mask = ~ZDB_RR_LABEL_HASCNAME; // will clear "has cname"
@@ -866,6 +988,29 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
             }
 
             return COLLECTION_PROCESS_STOP;
+        }
+        else
+        {
+            if(zdb_rr_label_has_dnssec_extension(rr_label))
+            {
+                // remove the extension
+                
+                if(zdb_rr_label_nsec3any_linked(rr_label))
+                {
+                    // detach then destroy the ext
+                    nsec3_zone_label_detach(rr_label);
+                }
+                else if(zdb_rr_label_nsec_linked(rr_label))
+                {
+                    nsec_zone_label_detach(rr_label);
+                }
+#ifdef DEBUG
+                else
+                {
+                    yassert(rr_label->nsec.dnssec == NULL);
+                }
+#endif
+            }
         }
 
         /* NOTE: the 'detach' is made by destroy : do not touch to the "next" field */
@@ -985,8 +1130,6 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
     return err;
 }
 
-#ifdef DEBUG
-
 void
 zdb_rr_label_print_indented(const zdb_rr_label* rr_label, output_stream *os, int indent)
 {
@@ -1011,5 +1154,3 @@ zdb_rr_label_print(const zdb_rr_label* rr_label, output_stream *os)
 {
     zdb_rr_label_print_indented(rr_label, os, 0);
 }
-
-#endif

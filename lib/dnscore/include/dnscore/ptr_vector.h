@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief A dynamic-sized array of pointers
@@ -142,6 +142,15 @@ void  ptr_vector_destroy(ptr_vector *v);
 
 void  ptr_vector_empties(ptr_vector *v);
 
+/*
+ * To ease compatibility with the 2.4 changes.
+ */
+static inline void
+ptr_vector_clear(ptr_vector* v)
+{
+    ptr_vector_empties(v);
+}
+
 /**
  * Changes the capacity of a vector to the specified size
  * The new size MUST be enough to keep the current content
@@ -218,6 +227,8 @@ void* ptr_vector_pop(ptr_vector *v);
 
 typedef int ptr_vector_qsort_callback(const void*, const void*);
 
+typedef int ptr_vector_qsort_r_callback(const void*, const void*, void*);
+
 /**
  * Sort the content of the vector using the compare callback
  * 
@@ -226,6 +237,8 @@ typedef int ptr_vector_qsort_callback(const void*, const void*);
  */
 
 void ptr_vector_qsort(ptr_vector *v, ptr_vector_qsort_callback compare);
+
+void ptr_vector_qsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, void *compare_context);
 
 typedef void void_function_voidp(void*);
 
@@ -295,6 +308,24 @@ void* ptr_vector_search(const ptr_vector *v, const void* what,ptr_vector_search_
 static inline void* ptr_vector_get(const ptr_vector *v, s32 idx)
 {
     return v->data[idx];
+}
+
+/**
+ * Returns a pointer to the item at index, in a circular fashion
+ * Does NOT checks for the index range.
+ * The array must NOT be empty (div0).
+ * 
+ * @param v
+ * @param idx
+ * @return a pointer to the item at index
+ */
+
+static inline void* ptr_vector_get_mod(const ptr_vector *v, s32 idx)
+{
+    assert(v->offset >= 0);
+    int m = idx % (v->offset + 1);
+    if(m < 0) { m += v->offset + 1; }
+    return v->data[m];
 }
 
 /**
@@ -399,6 +430,37 @@ static inline void ptr_vector_end_swap(ptr_vector *pv,s32 idx)
     pv->data[idx] = pv->data[pv->offset];
     pv->data[pv->offset] = tmp;
 }
+
+
+/**
+ * Reverse the content 
+ * 
+ * e.g.
+ * 'I' 'I' 'S' 'G'
+ * becomes
+ * 'G' 'S' 'I' 'I'
+ * 
+ * @param pv
+ */
+
+static inline void ptr_vector_reverse(ptr_vector *v)
+{
+    void *temp;
+
+    void **start = v->data;
+    void **end   = &v->data[v->offset];
+
+    while (start < end)
+    {
+        temp   = *start;
+        *start = *end;
+        *end   = temp;
+
+        start++;
+        end--;
+    }
+}
+
 
 /**
  * Inserts a value at position, pushing items from this position up

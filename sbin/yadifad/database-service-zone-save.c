@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -78,7 +78,7 @@
  */
 
 ya_result
-database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, bool save_unmodified)
+database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, u8 flags)
 {
     // not implemented yet
     log_debug("zone save: %{dnsname}@%p#%i", zone_desc->origin, zone_desc, zone_desc->rc);
@@ -90,73 +90,89 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
 
     //bool must_be_on = ZONE_STATUS_READONLY|ZONE_STATUS_MODIFIED;
     
-    bool must_be_off = ZONE_STATUS_TEMPLATE_SOURCE_FILE | ZONE_STATUS_STARTING_UP |
-                       ZONE_STATUS_LOADING | ZONE_STATUS_MOUNTING | ZONE_STATUS_UNMOUNTING |
-                       ZONE_STATUS_DROPPING | ZONE_STATUS_SAVING_ZONE_FILE |
-                       ZONE_STATUS_SAVING_AXFR_FILE | ZONE_STATUS_SIGNATURES_UPDATING |
-                       ZONE_STATUS_DYNAMIC_UPDATING | ZONE_STATUS_DOWNLOADING_XFR_FILE |
-                       ZONE_STATUS_UNREGISTERING;
+    bool save_unmodified = flags & DATABASE_SERVICE_ZONE_SAVE_UNMODIFIED;
+    // bool ignore_shutdown = flags & DATABASE_SERVICE_ZONE_SAVE_IGNORE_SHUTDOWN;
+    
+    const u32 must_be_off  = ZONE_STATUS_TEMPLATE_SOURCE_FILE | ZONE_STATUS_STARTING_UP |
+                             ZONE_STATUS_LOADING | ZONE_STATUS_MOUNTING | ZONE_STATUS_UNMOUNTING |
+                             ZONE_STATUS_DROPPING | ZONE_STATUS_SAVING_ZONE_FILE |
+                             ZONE_STATUS_SAVING_AXFR_FILE | ZONE_STATUS_SIGNATURES_UPDATING |
+                             ZONE_STATUS_DYNAMIC_UPDATING | /*ZONE_STATUS_DOWNLOADING_XFR_FILE |*/
+                             ZONE_STATUS_UNREGISTERING;
     
     if(desclockowner != 0)
     {
         zone_lock(zone_desc, desclockowner);
     }
     
-    if(zone_desc->status_flags & ZONE_STATUS_MUST_CLEAR_JOURNAL)
+    if(zone_get_status(zone_desc) & ZONE_STATUS_MUST_CLEAR_JOURNAL)
     {
-        zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
+        zone_set_status(zone_desc, ZONE_STATUS_MODIFIED);
     }
     
-    if(!save_unmodified && ((zone_desc->status_flags & ZONE_STATUS_MODIFIED) == 0)) // a "journal" should set modified, or should it be tested here ?
+    if(!save_unmodified)
     {
-        log_debug("zone save: %{dnsname} hasn't been modified", zone_desc->origin);
-        zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
-        
-        if(desclockowner != 0)
+        if(!zone_ismodified(zone_desc))
         {
-            zone_unlock(zone_desc, desclockowner);
+            log_info("zone save: %{dnsname} hasn't been modified", zone_desc->origin);
+            
+            zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+
+            if(desclockowner != 0)
+            {
+                zone_unlock(zone_desc, desclockowner);
+            }
+
+            database_fire_zone_processed(zone_desc);
+            zone_release(zone_desc);
+            return SUCCESS;
         }
-        zone_release(zone_desc);
-        return SUCCESS;
     }
     
     if(zone_desc->file_name == NULL)
     {
-        log_debug("zone save: %{dnsname} has no source file set", zone_desc->origin);
-        zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+        log_info("zone save: %{dnsname} has no source file set", zone_desc->origin);
+        zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
         if(desclockowner != 0)
         {
             zone_unlock(zone_desc, desclockowner);
         }
-        zone_release(zone_desc);
+        
+        database_fire_zone_processed(zone_desc);
+        zone_release(zone_desc);        
         return ERROR;
     }
     
-    if((zone_desc->status_flags & ZONE_STATUS_TEMPLATE_SOURCE_FILE) != 0)
+    if((zone_get_status(zone_desc) & ZONE_STATUS_TEMPLATE_SOURCE_FILE) != 0)
     {
-        log_debug("zone save: %{dnsname} source is a template", zone_desc->origin);
-        zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+        log_info("zone save: %{dnsname} source is a template", zone_desc->origin);
+        zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
         if(desclockowner != 0)
         {
             zone_unlock(zone_desc, desclockowner);
         }
+        
+        database_fire_zone_processed(zone_desc);
         zone_release(zone_desc);
         return ERROR;
     }
     
-    if((zone_desc->status_flags & must_be_off) != 0)
+    if((zone_get_status(zone_desc) & must_be_off) != 0)
     {
-        log_debug("zone save: %{dnsname} can't be saved at this time (%08x & %08x = %08x)", zone_desc->origin, zone_desc->status_flags, must_be_off, zone_desc->status_flags & must_be_off);
-        zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+        log_info("zone save: %{dnsname} can't be saved at this time (%08x & %08x = %08x)",
+                zone_desc->origin, zone_get_status(zone_desc), must_be_off, zone_get_status(zone_desc) & must_be_off);
+        zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
         if(desclockowner != 0)
         {
             zone_unlock(zone_desc, desclockowner);
         }
+        
+        database_fire_zone_processed(zone_desc);
         zone_release(zone_desc);
         return ERROR;
     }
     
-    zone_desc->status_flags |= ZONE_STATUS_SAVING_ZONE_FILE;
+    zone_set_status(zone_desc, ZONE_STATUS_SAVING_ZONE_FILE);
     
     zdb *db = g_config->database;
 
@@ -180,28 +196,35 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
             char file_name[PATH_MAX];    
             snformat(file_name, sizeof(file_name), "%s/%s", g_config->data_path, zone_desc->file_name);
     
-            log_debug("zone save: %{dnsname} saving zone to file '%s'", zone_desc->origin, file_name);
+            log_info("zone save: %{dnsname} saving zone to file '%s'", zone_desc->origin, file_name);
             
-            ret = zdb_zone_write_text_file(zone, file_name, FALSE);
+            ret = zdb_zone_write_text_file(zone, file_name, flags); // zone is locked
             
             if(ISOK(ret))
             {
-                zdb_zone_getserial(zone, &zone_desc->stored_serial);
-                zone_desc->status_flags &= ~ZONE_STATUS_MODIFIED;
+                zdb_zone_getserial(zone, &zone_desc->stored_serial); // zone is locked
+                zone_clear_status(zone_desc, ZONE_STATUS_MODIFIED);
                 
-                bool clear_journal = zone_desc->status_flags & ZONE_STATUS_MUST_CLEAR_JOURNAL;
+                bool clear_journal = zone_get_status(zone_desc) & ZONE_STATUS_MUST_CLEAR_JOURNAL;
                 
                 if(clear_journal)
                 {
                     journal_truncate(zone_desc->origin);
-                    zone_desc->status_flags &= ~ZONE_STATUS_MUST_CLEAR_JOURNAL;
+                    zone_clear_status(zone_desc, ZONE_STATUS_MUST_CLEAR_JOURNAL);
                 }
                 
-                log_debug("zone save: %{dnsname} saved zone to file '%s'", zone_desc->origin, file_name);
+                log_info("zone save: %{dnsname} saved zone to file '%s'", zone_desc->origin, file_name);
             }
             else
             {
-                log_err("zone save: %{dnsname} failed to save as '%s': %r", zone_desc->origin, file_name, ret);
+                if(ret != STOPPED_BY_APPLICATION_SHUTDOWN)
+                {
+                    log_err("zone save: %{dnsname} failed to save as '%s': %r", zone_desc->origin, file_name, ret);
+                }
+                else
+                {
+                    log_debug("zone save: %{dnsname} save to disk cancelled by shutdown", zone_desc->origin, file_name, ret);
+                }
             }
         }
         else
@@ -221,13 +244,14 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
     
     // zdb_unlock(db, ZDB_MUTEX_READER);
     
-    zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+    zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
     
     if(desclockowner != 0)
     {
         zone_unlock(zone_desc, desclockowner);
     }
     
+    database_fire_zone_processed(zone_desc);
     zone_release(zone_desc);
     
     return ret;
@@ -237,7 +261,7 @@ static void*
 database_service_zone_save_thread(void *params)
 {
     zone_desc_s *zone_desc = (zone_desc_s*)params;
-    database_service_zone_save_ex(zone_desc, ZONE_LOCK_SAVE, ZDB_ZONE_MUTEX_SIMPLEREADER, FALSE);
+    database_service_zone_save_ex(zone_desc, ZONE_LOCK_SAVE, ZDB_ZONE_MUTEX_SIMPLEREADER, DATABASE_SERVICE_ZONE_SAVE_DEFAULTS);
     return NULL;
 }
 
@@ -283,20 +307,20 @@ database_service_zone_save(zone_desc_s *zone_desc)
     
     // locks the descriptor with the saveer identity
     
-    if(zone_desc->status_flags & (ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE))
+    if(zone_get_status(zone_desc) & (ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE))
     {
         // already saving
         
         zone_desc_log(MODULE_MSG_HANDLE, MSG_DEBUG1, zone_desc, "database_service_zone_save");
         
-        log_err("database_service_zone_save: '%{dnsname}' already saving", origin);
+        log_debug("database_service_zone_save: '%{dnsname}' already saving", origin);
         
         zone_unlock(zone_desc, ZONE_LOCK_SAVE);
                         
         return ERROR;
     }
     
-    zone_desc->status_flags |= ZONE_STATUS_SAVETO_ZONE_FILE;
+    zone_set_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE);
 
     zone_acquire(zone_desc);
     database_service_zone_save_queue_thread(database_service_zone_save_thread, zone_desc, NULL, "database_zone_save_thread");

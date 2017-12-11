@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 
 /**
  *  @defgroup server Server
@@ -53,6 +53,8 @@
  * @{
  */
 
+// keep this order -->
+
 #include "server-config.h"
 
 #ifndef __USE_GNU
@@ -67,9 +69,12 @@
 typedef cpuset_t cpu_set_t;
 #endif
 
+// <-- keep this order
+
 #include "config.h"
 #include "server_context.h"
 
+#include <dnscore/sys_types.h>
 #include <dnscore/logger.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/tcp_io_stream.h>
@@ -86,6 +91,10 @@ typedef cpuset_t cpu_set_t;
 
 #include <dnsdb/journal.h>
 
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+#include "dnsdb/zdb-zone-lock-monitor.h"
+#endif
+
 #include "server.h"
 #include "log_query.h"
 #include "rrl.h"
@@ -95,12 +104,15 @@ typedef cpuset_t cpu_set_t;
 #include "signals.h"
 #include "dynupdate_query_service.h"
 
+#define SERVER_RW_DEBUG 0
+
 #ifdef SO_REUSEPORT
 
 // allow an external definition of the backlog queue size and L1 parameters
 
 #ifndef SERVER_RW_BACKLOG_QUEUE_SIZE
-#define SERVER_RW_BACKLOG_QUEUE_SIZE 0x40000 // 256k slots
+//#define SERVER_RW_BACKLOG_QUEUE_SIZE 0x40000 // 256k slots : 16MB
+#define SERVER_RW_BACKLOG_QUEUE_SIZE 0x80000 // 512k slots : 32MB
 #endif
 
 #ifndef L1_DATA_LINE_SIZE
@@ -117,6 +129,9 @@ typedef cpuset_t cpu_set_t;
 #define DUMP_UDP_RW_OUTPUT_WIRE 0
 
 extern logger_handle* g_statistics_logger;
+
+#define RWNTCTXS_TAG 0x53585443544e5752
+#define RWNTCTX_TAG 0x585443544e5752
 
 static zdb *database = NULL;
 
@@ -200,10 +215,14 @@ server_rw_udp_receiver_thread(void *parms)
 #if HAS_PTHREAD_SETAFFINITY_NP
     cpu_set_t mycpu;
     CPU_ZERO(&mycpu);
-    CPU_SET((ctx->idx << 1) + 0, &mycpu);
+    
+    int affinity_with = g_config->thread_affinity_base + (ctx->idx * 2 + 0) * g_config->thread_affinity_multiplier;
+    log_info("server-rw: receiver setting affinity with virtual cpu %i", affinity_with);
+    CPU_SET(affinity_with, &mycpu);
+    
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mycpu);
 #endif
-
+    
 #if UDP_USE_MESSAGES
     
     struct msghdr   receiver_msghdr;
@@ -222,7 +241,7 @@ server_rw_udp_receiver_thread(void *parms)
     for(;;)
     {
         
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
         log_debug("%i: recv wait", fd);
 #endif
         
@@ -280,14 +299,14 @@ server_rw_udp_receiver_thread(void *parms)
                 cond_notify_one(&ctx->cond);
                 mutex_unlock(&ctx->mtx);
                 next_message_index = (next_message_index + 1) % 3;
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
                 log_debug("%i: show %04hx", fd, ntohs(MESSAGE_ID(mesg->buffer)));
 #endif
                 // next_message is only set to NULL when the sender took the previous one
                 // and it only takes the previous one when the backlog is empty
                 // so ...
                 
-#ifdef DEBUG1
+#if SERVER_RW_DEBUG
                 log_debug("server_rw_udp_receiver_thread(%i, %i): queued in the fast lane", ctx->idx, fd);
 #endif
                 
@@ -372,8 +391,9 @@ server_rw_udp_receiver_thread(void *parms)
                     if(cell_next < cell_limit)
                     {
                         // copy the content
-                        
+#if SERVER_RW_DEBUG  
                         log_debug("%i: push %04hx (<)", fd, ntohs(MESSAGE_ID(mesg->buffer)));
+#endif
                         
                         // keep the relevant data from the message
                     
@@ -389,7 +409,7 @@ server_rw_udp_receiver_thread(void *parms)
 #endif
                         memcpy(&cell->data.data, mesg->buffer, mesg->received);
                     }
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
                     else
                     {
                         // full: lose it (?)
@@ -397,6 +417,7 @@ server_rw_udp_receiver_thread(void *parms)
                     }
 #endif
                 }
+
                 ctx->backlog_enqueue = cell_next;
                 cond_notify_one(&ctx->cond);
                 mutex_unlock(&ctx->mtx);
@@ -437,7 +458,7 @@ server_rw_udp_receiver_thread(void *parms)
             }
             // else retry
             
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
             log_debug("server_rw_udp_receiver_thread: tick");
 #endif
         }
@@ -569,11 +590,12 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
             else // an error occurred : no query to be done at all
             {
                 log_warn("query (%04hx) [%02x|%02x] error %i (%r) (%{sockaddrip})",
-                         ntohs(MESSAGE_ID(mesg->buffer)),
-                         MESSAGE_HIFLAGS(mesg->buffer),MESSAGE_LOFLAGS(mesg->buffer),
-                         mesg->status,
-                         return_code,
-                         &mesg->other.sa);
+                        ntohs(MESSAGE_ID(mesg->buffer)),
+                        MESSAGE_HIFLAGS(mesg->buffer),
+                        MESSAGE_LOFLAGS(mesg->buffer),
+                        mesg->status,
+                        return_code,
+                        &mesg->other.sa);
 
                 local_statistics->udp_fp[mesg->status]++;
                 
@@ -782,7 +804,7 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
             
             if(ctx->sockfd < 0)
             {
-                return ERROR; // shutdown
+                return STOPPED_BY_APPLICATION_SHUTDOWN; // shutdown
             }
 
             log_warn("unknown [%04hx] error: %r", ntohs(MESSAGE_ID(mesg->buffer)), MAKE_DNSMSG_ERROR(mesg->status));
@@ -802,7 +824,9 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
         }
     }
     
+#if SERVER_RW_DEBUG
 
+#endif
     
 #if !UDP_USE_MESSAGES
     
@@ -823,7 +847,9 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
     ctx->sender_msghdr.msg_control = mesg->control_buffer;
     ctx->sender_msghdr.msg_controllen = mesg->control_buffer_size;
     
-    while(sendmsg(fd, &ctx->sender_msghdr, 0) < 0)
+    ssize_t sent;
+    
+    while((sent = sendmsg(fd, &ctx->sender_msghdr, 0)) < 0)
     {
         int error_code = errno;
 
@@ -832,6 +858,8 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
             return error_code;
         }
     }
+
+    local_statistics->udp_output_size_total += sent;
 #endif
         
     return SUCCESS;
@@ -849,11 +877,14 @@ server_rw_udp_sender_thread(void *parms)
 #if HAS_PTHREAD_SETAFFINITY_NP
     cpu_set_t mycpu;
     CPU_ZERO(&mycpu);
-    CPU_SET((ctx->idx << 1) + 1, &mycpu);
+    
+    int affinity_with = g_config->thread_affinity_base + (ctx->idx * 2 + 1) * g_config->thread_affinity_multiplier;
+    log_info("sender setting affinity with virtual cpu %i", affinity_with);
+    CPU_SET(affinity_with, &mycpu);
+    
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mycpu);
 #endif
-   
-        
+    
 #if UDP_USE_MESSAGES
     ctx->sender_msghdr.msg_iov = &ctx->sender_iovec;
     ctx->sender_msghdr.msg_iovlen = 1;
@@ -874,9 +905,7 @@ server_rw_udp_sender_thread(void *parms)
 
         const msg_cell_u *cell = (const msg_cell_u *)ctx->backlog_dequeue;
         
-#if 0
-dont_worry_about_this: // ...
-#endif
+
         if(ctx->backlog_enqueue == cell) // embty backlog (the next to read is also the next to be filled)
         {
             // no item on the backlog
@@ -915,7 +944,7 @@ dont_worry_about_this: // ...
                         
             mutex_unlock(&ctx->mtx);
             
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
             mesg->popped_us = timeus();
 
             log_debug("%i: look: %04hx %lluus %lluus", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->pushed_us - mesg->recv_us, mesg->popped_us - mesg->pushed_us);
@@ -949,7 +978,7 @@ dont_worry_about_this: // ...
                     {
                         break;
                     }
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
                     u64 retrieve_start = timeus();
 #endif
                     mesg = &ctx->out_message;
@@ -967,7 +996,7 @@ dont_worry_about_this: // ...
                     yassert(cell->data.hdr.msg_size < 65536);
                     
                     memcpy(mesg->buffer, &cell->data.data, cell->data.hdr.msg_size);
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
                     mesg->popped_us = timeus();
                     
                     log_debug("%i: popd: %04hx %lluus (%i) (>)", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->popped_us - retrieve_start, loop_idx);
@@ -992,7 +1021,7 @@ dont_worry_about_this: // ...
             
             while(cell < cell_limit)
             {
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
                 u64 retrieve_start = timeus();
 #endif
                 yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
@@ -1011,7 +1040,7 @@ dont_worry_about_this: // ...
 #endif
                 memcpy(mesg->buffer, &cell->data.data, cell->data.hdr.msg_size);
 
-#ifdef DEBUG
+#if SERVER_RW_DEBUG
                 mesg->popped_us = timeus();
                 log_debug("%i: popd: %04hx %lluus (%i)", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->popped_us - retrieve_start, loop_idx);
 #endif
@@ -1129,17 +1158,17 @@ server_rw_query_loop()
     
     extern server_context_s server_context;
     
-    struct thread_pool_s *server_udp_thread_pool = thread_pool_init_ex(server_context.listen_count * reader_by_fd * 2, 1, "server-udp-tp");
-    
+    struct thread_pool_s *server_udp_thread_pool = thread_pool_init_ex(server_context.listen_count * reader_by_fd * 2, 1, "svrudprw");
+        
     network_thread_context_s **contextes;
-    MALLOC_OR_DIE(network_thread_context_s**, contextes, sizeof(network_thread_context_s*) * server_context.listen_count * reader_by_fd, GENERIC_TAG);
+    MALLOC_OR_DIE(network_thread_context_s**, contextes, sizeof(network_thread_context_s*) * server_context.listen_count * reader_by_fd, RWNTCTXS_TAG);
        
     for(int listen_idx = 0, sockfd_idx = 0; listen_idx < server_context.listen_count; ++listen_idx)
     {
         for(u32 r = 0; r < reader_by_fd; r++)
         {
             network_thread_context_s *ctx;
-            MALLOC_OR_DIE(network_thread_context_s*, ctx, sizeof(network_thread_context_s), GENERIC_TAG);
+            MALLOC_OR_DIE(network_thread_context_s*, ctx, sizeof(network_thread_context_s), RWNTCTX_TAG);
             memset(ctx, 0, sizeof(network_thread_context_s));
             contextes[sockfd_idx] = ctx;
             ctx->idx = sockfd_idx;
@@ -1276,7 +1305,10 @@ server_rw_query_loop()
         rrl_cull();
 #endif
         
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_log();
+#endif
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
         zdb_zone_lock_set_monitor();
 #endif
         
@@ -1345,6 +1377,9 @@ server_rw_query_loop()
                     
                     debug_bench_logdump_all();
 #endif
+#if HAS_LIBC_MALLOC_DEBUG_SUPPORT
+                    debug_malloc_hook_caller_dump();
+#endif
                 }
 
                 previous_tick = tick;
@@ -1356,7 +1391,7 @@ server_rw_query_loop()
     log_info("stopping the threads");
     //synced_stop();
     
-    for(int i = 0; i < 5; ++i)
+    for(int i = 0; i < 5; ++i) // 5 arbitrary loops (one every second)
     {    
         for(int listen_idx = 0, sockfd_idx = 0; listen_idx < server_context.listen_count; ++listen_idx)
         {
@@ -1432,6 +1467,15 @@ server_rw_query_loop()
     thread_pool_destroy(server_udp_thread_pool);
     server_udp_thread_pool = NULL;
 
+    for(int listen_idx = 0, sockfd_idx = 0; listen_idx < server_context.listen_count; ++listen_idx)
+    {
+        for(u32 r = 0; r < reader_by_fd; r++)
+        {
+            free(contextes[sockfd_idx]);
+            ++sockfd_idx;
+        }
+    }
+    free(contextes);
 
     log_debug("shutting down (pid = %u)", getpid());
     
@@ -1456,14 +1500,14 @@ ya_result
 server_rw_query_loop()
 {
     log_err("SO_REUSEPORT is not supported on this architecture.");
-    return ERROR;
+    return FEATURE_NOT_SUPPORTED;
 }
 
 ya_result
 server_rw_context_init(int workers_per_interface)
 {
     log_err("SO_REUSEPORT is not supported on this architecture.");
-    return ERROR;
+    return FEATURE_NOT_SUPPORTED;
 }
 
 #endif // SO_REUSEPORT

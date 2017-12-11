@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup query_ex Database top-level query function
  *  @ingroup dnsdb
  *  @brief Database top-level query function
@@ -56,13 +56,13 @@
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/dictionary.h"
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
 #include "dnsdb/nsec.h"
 #endif
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 #include "dnsdb/nsec3.h"
 #endif
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
 #include "dnsdb/rrsig.h"
 #endif
 #if ZDB_EXPLICIT_READER_ZONE_LOCK == 1
@@ -305,6 +305,7 @@ zdb_query_ex_answer_appendlist_ttl(const zdb_packed_ttlrdata* source, const u8* 
     yassert(source != NULL && label != NULL);
 
     zdb_resourcerecord* next = *headp;
+    int countdown = 32;
     while(source != NULL)
     {
         zdb_resourcerecord* node = zdb_query_ex_answer_make_ttl(source, label, 
@@ -313,6 +314,10 @@ zdb_query_ex_answer_appendlist_ttl(const zdb_packed_ttlrdata* source, const u8* 
         node->next = next;
         next = node;
         source = source->next;
+        if(--countdown == 0)
+        {
+            break;
+        }
     }
     *headp = next;
 }
@@ -441,7 +446,7 @@ zdb_query_ex_answer_append_type_rrsigs(const zdb_rr_label *label, const u8 *labe
                                        DECLARE_ZCLASS_PARAMETER
                                        u32 ttl, zdb_resourcerecord **headp, u8 * restrict * pool)
 {
-    const zdb_packed_ttlrdata *type_rrsig = rrsig_find_first(label, rtype);
+    const zdb_packed_ttlrdata *type_rrsig = rrsig_find_first(label, rtype); // zone is locked
 
     while(type_rrsig != NULL)
     {
@@ -510,7 +515,7 @@ zdb_query_ex_add_nsec_interval(const zdb_zone *zone, const dnsname_vector* name,
 
     u8* nsec_dnsname = NULL;
     
-    u32 min_ttl;
+    s32 min_ttl;
     
     zdb_zone_getminttl(zone, &min_ttl);
 
@@ -524,7 +529,7 @@ zdb_query_ex_add_nsec_interval(const zdb_zone *zone, const dnsname_vector* name,
 
         if(nsec_interval_label_nsec != NULL)
         {
-            zdb_packed_ttlrdata *nsec_interval_label_nsec_rrsig = rrsig_find_first(nsec_interval_label, TYPE_NSEC);
+            zdb_packed_ttlrdata *nsec_interval_label_nsec_rrsig = rrsig_find_first(nsec_interval_label, TYPE_NSEC); // zone is locked
             
             if(nsec_interval_label_nsec_rrsig != NULL)
             {
@@ -570,26 +575,28 @@ zdb_query_ex_answer_append_soa_nttl(const zdb_zone *zone, zdb_resourcerecord **h
     zdb_rr_collection* apex_records = &zone->apex->resource_record_set;
     zdb_packed_ttlrdata* zone_soa = zdb_record_find(apex_records, TYPE_SOA);
 
-    zdb_resourcerecord* next = *headp;
-
-    u32 ttl;
-    zdb_zone_getminttl(zone, &ttl);
-    
-    zdb_resourcerecord* node = zdb_query_ex_answer_make_ttl(zone_soa, label,
-                                                            PASS_ZCLASS_PARAMETER
-                                                            TYPE_SOA, ttl, pool);
-
-    if(next != NULL)
+    if(zone_soa != NULL)
     {
-        while(next->next != NULL)
+        zdb_resourcerecord* next = *headp;
+
+        s32 min_ttl;
+        zdb_zone_getminttl(zone, &min_ttl);
+
+        zdb_resourcerecord* node = zdb_query_ex_answer_make_ttl(zone_soa, label,
+                                                                PASS_ZCLASS_PARAMETER
+                                                                TYPE_SOA, min_ttl, pool);
+        if(next != NULL)
         {
-            next = next->next;
+            while(next->next != NULL)
+            {
+                next = next->next;
+            }
+            next->next = node;
         }
-        next->next = node;
-    }
-    else
-    {
-        *headp = node;
+        else
+        {
+            *headp = node;
+        }
     }
 }
 
@@ -606,46 +613,46 @@ zdb_query_ex_answer_append_soa_nttl(const zdb_zone *zone, zdb_resourcerecord **h
  * 3 uses
  */
 
-static u32
+static void
 zdb_query_ex_answer_append_soa_rrsig_nttl(const zdb_zone *zone, zdb_resourcerecord **headp, u8 * restrict * pool)
 {
     yassert(zone != NULL);
 
-    const u8* label_fqdn = zone->origin;
+    const u8 *label_fqdn = zone->origin;
 #if ZDB_RECORDS_MAX_CLASS != 1
     u16 zclass = zone->zclass;
 #endif
-    zdb_rr_collection* apex_records = &zone->apex->resource_record_set;
-    zdb_packed_ttlrdata* zone_soa = zdb_record_find(apex_records, TYPE_SOA);
-    
-    zdb_resourcerecord* next = *headp;
+    zdb_rr_collection *apex_records = &zone->apex->resource_record_set;
+    zdb_packed_ttlrdata *zone_soa = zdb_record_find(apex_records, TYPE_SOA);
+    if(zone_soa != NULL)
+    {
+        zdb_resourcerecord* next = *headp;
 
-    u32 ttl;
-    zdb_zone_getminttl(zone, &ttl);
-    
-    zdb_resourcerecord* node = zdb_query_ex_answer_make_ttl(zone_soa, label_fqdn, 
-                                                            PASS_ZCLASS_PARAMETER
-                                                            TYPE_SOA, ttl, pool);
-    if(next != NULL)
-    {
-        while(next->next != NULL)
+        s32 min_ttl;
+        zdb_zone_getminttl(zone, &min_ttl);
+
+        zdb_resourcerecord *node = zdb_query_ex_answer_make_ttl(zone_soa, label_fqdn, 
+                                                                PASS_ZCLASS_PARAMETER
+                                                                TYPE_SOA, min_ttl, pool);
+        if(next != NULL)
         {
-            next = next->next;
+            while(next->next != NULL)
+            {
+                next = next->next;
+            }
+            next->next = node;
         }
-        next->next = node;
-    }
-    else
-    {
-        *headp = node;
-    }
-    
+        else
+        {
+            *headp = node;
+        }
+
 #if ZDB_HAS_DNSSEC_SUPPORT
     zdb_query_ex_answer_append_type_rrsigs(zone->apex, label_fqdn, TYPE_SOA, 
                                            PASS_ZCLASS_PARAMETER
-                                           ttl, headp, pool);
+                                           min_ttl, headp, pool);
 #endif
-    
-    return ttl;
+    }
 }
 
 /**
@@ -725,7 +732,7 @@ zdb_query_ex_answer_append_ips(const zdb_zone* zone, const u8* dns_name,
             zdb_query_ex_answer_appendlist(a, dns_name, 
                                            PASS_ZCLASS_PARAMETER
                                            TYPE_A, headp, pool);
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
             if(dnssec)
             {
                 zdb_query_ex_answer_append_type_rrsigs(rr_label, dns_name, TYPE_A, 
@@ -742,7 +749,7 @@ zdb_query_ex_answer_append_ips(const zdb_zone* zone, const u8* dns_name,
             zdb_query_ex_answer_appendlist(aaaa, dns_name, 
                                            PASS_ZCLASS_PARAMETER
                                            TYPE_AAAA, headp, pool);
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
             if(dnssec)
             {
                 zdb_query_ex_answer_append_type_rrsigs(rr_label, dns_name, TYPE_AAAA, 
@@ -874,7 +881,7 @@ append_authority(const u8 * qname,
         zdb_query_ex_answer_appendrndlist(authority, qname, 
                                        PASS_ZCLASS_PARAMETER
                                        TYPE_NS, headp, pool);
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
         if(dnssec)
         {
             zdb_query_ex_answer_append_type_rrsigs(rr_label_info->authority, qname, TYPE_NS, 
@@ -899,7 +906,7 @@ append_authority(const u8 * qname,
 
     return authority;
 }
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 
 /**
  * @brief Appends the NSEC3 - NODATA answer to the section
@@ -926,7 +933,7 @@ zdb_query_ex_append_nsec3_nodata(const zdb_zone *zone, const zdb_rr_label *rr_la
     u8 *nsec3_owner = NULL;
     u8 *closest_nsec3_owner = NULL;
     
-    u32 min_ttl;
+    s32 min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
 
     zdb_packed_ttlrdata* nsec3 = NULL;
@@ -1123,7 +1130,7 @@ zdb_query_ex_append_wild_nsec3_data(const zdb_zone *zone, const zdb_rr_label *rr
     
     u8 *wild_closest_nsec3_owner = NULL;
     
-    u32 min_ttl;
+    s32 min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
 
     zdb_packed_ttlrdata* nsec3;
@@ -1175,7 +1182,6 @@ zdb_query_ex_append_wild_nsec3_data(const zdb_zone *zone, const zdb_rr_label *rr
     }    
 }
 
-
 /**
  * @brief Appends the NSEC3 delegation answer to the section
  * 
@@ -1197,7 +1203,7 @@ zdb_query_ex_append_nsec3_delegation(const zdb_zone *zone, const zdb_rr_label_fi
 {
     zdb_rr_label *authority = rr_label_info->authority;
     
-    u32 min_ttl;
+    s32 min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
     
     if((authority->nsec.nsec3 != NULL) && (authority->nsec.nsec3->self != NULL))
@@ -1246,7 +1252,7 @@ zdb_query_ex_append_nsec3_delegation(const zdb_zone *zone, const zdb_rr_label_fi
     }
 }
 #endif
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
 
 /**
  * @brief Appends the NSEC records of a label to the section
@@ -1291,7 +1297,6 @@ zdb_query_ex_append_nsec_records(const zdb_rr_label *rr_label, const u8 * restri
 void
 zdb_destroy_resourcerecord_list(zdb_resourcerecord *rr)
 {
-
 }
 
 /**
@@ -1328,12 +1333,12 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
     zdb_rr_label *rr_label = rr_label_info->answer;
     
     // NXRRSET
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
     if(dnssec && ZONE_NSEC3_AVAILABLE(zone))
     {
         zdb_packed_ttlrdata *zone_soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
         
-        u32 min_ttl;        
+        s32 min_ttl;        
         zdb_zone_getminttl(zone, &min_ttl);
 
         if( ((type == TYPE_DS) && ((rr_label->flags & (ZDB_RR_LABEL_UNDERDELEGATION)) != 0 ))                         ||
@@ -1425,13 +1430,8 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
 #endif
     {
         /** Got label but no record : show the authority
-            *  AA
-            */
-
-        /*
-            * Gets the NS from, ie: a.nic.eu ... this is wrong.
-        zdb_packed_ttlrdata* authority = zdb_record_find(&rr_label->resource_record_set, TYPE_NS);
-            */
+         *  AA
+         */
 
         if((rr_label_info->authority->flags & ZDB_RR_LABEL_APEX) == 0)
         {
@@ -1488,7 +1488,7 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
                 zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add->authority, pool);
             }
         }
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
         if(dnssec && ZONE_NSEC_AVAILABLE(zone))
         {
             zdb_rr_label* rr_label_authority = rr_label_info->authority;
@@ -1904,8 +1904,6 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                      * The answer WILL be a referral ...
                      */
                     
-                    ans_auth_add->delegation = 1;
-                    
                     switch(type)
                     {
                         /* for these ones : give the rrset for the type and clear AA */
@@ -1924,6 +1922,8 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         }
                         case TYPE_NSEC:
                         {
+                            ans_auth_add->delegation = 1; // no answer, and we will answer with NS (as at or under delegation)
+                            
                             if((rr_label->flags & ZDB_RR_LABEL_UNDERDELEGATION) == 0)
                             {
                                 MESSAGE_HIFLAGS(mesg->buffer) |= AA_BITS;
@@ -1932,9 +1932,11 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         }   
                         /* for these ones : give the rrset for the type */
                         case TYPE_NS:
+                            ans_auth_add->delegation = 1; // no answer, and we will answer with NS (as at or under delegation)
                             break;
                         /* for this one : present the delegation */
                         case TYPE_ANY:
+                            ans_auth_add->delegation = 1; // no answer, and we will answer with NS (as at or under delegation)
                             authority_required = FALSE;
                             break;
                         /* for the rest : NSEC ? */
@@ -2049,7 +2051,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                                          * Append the NSEC of rr_label and all its signatures
                                          */
                                         
-                                        u32 min_ttl = 900;
+                                        s32 min_ttl;
 
                                         zdb_zone_getminttl(zone, &min_ttl);
                                         
@@ -2448,7 +2450,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         return FP_BASIC_RECORD_FOUND;
                     }
                 }
-            }       /* end of if rr_label!=NULL => */
+            }       /* end of if rr_label != NULL => */
             else    /* rr_label == NULL */
             {
                 zdb_rr_label* rr_label_authority = rr_label_info.authority;
@@ -2519,7 +2521,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                                      * Append the NSEC of rr_label and all its signatures
                                      */
 
-                                    u32 min_ttl = 900;
+                                    s32 min_ttl;
 
                                     zdb_zone_getminttl(zone, &min_ttl);
                                     zdb_query_ex_append_nsec_records(rr_label_authority, authority_qname, min_ttl,
@@ -2531,7 +2533,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                             }
                         }
                         
-                        ans_auth_add->delegation = 1;
+                        ans_auth_add->delegation = 1; // no answer, NS records in authority : referral
 #ifdef DEBUG
                         log_debug("zdb_query_ex: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
@@ -2650,7 +2652,9 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         &wild_closer_encloser,
                         &wild_closer_encloser_rrsig);
 
-                int min_ttl = zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add->authority, pool);
+                s32 min_ttl;
+                zdb_zone_getminttl(zone, &min_ttl);
+                zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add->authority, pool);
 #ifdef DEBUG
                 log_debug("zdb_query_ex: nsec3_name_error: next_closer_owner: %{dnsname}", next_closer_owner);
 #endif
@@ -3212,8 +3216,6 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
                      * The answer WILL be a referral ...
                      */
                     
-                    ans_auth_add.delegation = 1;
-                    
                     switch(type)
                     {
                         /* for these ones : give the rrset for the type and clear AA */
@@ -3240,14 +3242,16 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
                         }   
                         /* for these ones : give the rrset for the type */
                         case TYPE_NS:
+                            ans_auth_add.delegation = 1;
                             break;
                         /* for this one : present the delegation */
                         case TYPE_ANY:
+                            ans_auth_add.delegation = 1;
                             authority_required = FALSE;
                             break;
                         /* for the rest : NSEC ? */
                         default:
-                            
+                            ans_auth_add.delegation = 1;
                             /* 
                              * do not try to look for it
                              * 
@@ -3357,7 +3361,7 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
                                          * Append the NSEC of rr_label and all its signatures
                                          */
                                         
-                                        u32 min_ttl = 900;
+                                        s32 min_ttl;
 
                                         zdb_zone_getminttl(zone, &min_ttl);
                                         
@@ -3851,7 +3855,7 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
                                      * Append the NSEC of rr_label and all its signatures
                                      */
 
-                                    u32 min_ttl = 900;
+                                    s32 min_ttl;
 
                                     zdb_zone_getminttl(zone, &min_ttl);
                                     zdb_query_ex_append_nsec_records(rr_label_authority, authority_qname, min_ttl,
@@ -3862,8 +3866,8 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
 #endif
                             }
                         }
-                        
-                        ans_auth_add.delegation = 1;
+
+                        ans_auth_add.delegation = 1; // no answer, NS records in authority : referral
 #ifdef DEBUG
                         log_debug("zdb_query_and_update: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
@@ -3992,7 +3996,9 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
                         &wild_closer_encloser,
                         &wild_closer_encloser_rrsig);
 
-                int min_ttl = zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add.authority, pool);
+                s32 min_ttl;
+                zdb_zone_getminttl(zone, &min_ttl);
+                zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add.authority, pool);
 #ifdef DEBUG
                 log_debug("zdb_query_and_update: nsec3_name_error: next_closer_owner: %{dnsname}", next_closer_owner);
 #endif
@@ -4228,7 +4234,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
     if(mesg->qclass != CLASS_IN)
     {
 #ifdef DEBUG
-        log_debug("zdb_query_and_update_with_rrl:: FP_CLASS_NOTFOUND");
+        log_debug("zdb_query_and_update_with_rrl: FP_CLASS_NOTFOUND");
 #endif
         
         return FP_CLASS_NOTFOUND;
@@ -4347,7 +4353,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
             LOCK(zone);
             
 #ifdef DEBUG
-            log_debug("zdb_query_and_update_with_rrl:: zone %{dnsname}, flags=%x", zone->origin, zone->apex->flags);
+            log_debug("zdb_query_and_update_with_rrl: zone %{dnsname}, flags=%x", zone->origin, zone->apex->flags);
 #endif
             
             /*
@@ -4363,7 +4369,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                 if(FAIL(zone->query_access_filter(mesg, zone->extension)))
                 {
 #ifdef DEBUG
-                    log_debug("zdb_query_and_update_with_rrl:: FP_ACCESS_REJECTED");
+                    log_debug("zdb_query_and_update_with_rrl: FP_ACCESS_REJECTED");
 #endif
                     mesg->status = FP_ACCESS_REJECTED;   
                     ya_result rrl = zdb_query_message_update_with_rrl(mesg, &ans_auth_add, rrl_process);
@@ -4388,7 +4394,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                  * @note the blocks could be reversed and jump if the zone is invalid (help the branch prediction)
                  */
 #ifdef DEBUG
-                log_debug("zdb_query_and_update_with_rrl:: FP_ZONE_EXPIRED");
+                log_debug("zdb_query_and_update_with_rrl: FP_ZONE_EXPIRED");
 #endif
                 mesg->status = FP_INVALID_ZONE;   
                 ya_result rrl = zdb_query_message_update_with_rrl(mesg, &ans_auth_add, rrl_process);
@@ -4575,8 +4581,6 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                      * The answer WILL be a referral ...
                      */
                     
-                    ans_auth_add.delegation = 1;
-                    
                     switch(type)
                     {
                         /* for these ones : give the rrset for the type and clear AA */
@@ -4603,14 +4607,16 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                         }   
                         /* for these ones : give the rrset for the type */
                         case TYPE_NS:
+                            ans_auth_add.delegation = 1;
                             break;
                         /* for this one : present the delegation */
                         case TYPE_ANY:
+                            ans_auth_add.delegation = 1;
                             authority_required = FALSE;
                             break;
                         /* for the rest : NSEC ? */
                         default:
-                            
+                            ans_auth_add.delegation = 1;
                             /* 
                              * do not try to look for it
                              * 
@@ -4720,8 +4726,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                                          * Append the NSEC of rr_label and all its signatures
                                          */
                                         
-                                        u32 min_ttl = 900;
-
+                                        s32 min_ttl;
                                         zdb_zone_getminttl(zone, &min_ttl);
                                         
                                         zdb_query_ex_append_nsec_records(rr_label, qname, min_ttl,
@@ -4851,7 +4856,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                             } /* resolve authority */
                         } 
 #ifdef DEBUG
-                        log_debug("zdb_query_and_update_with_rrl:: FP_BASIC_RECORD_FOUND");
+                        log_debug("zdb_query_and_update_with_rrl: FP_BASIC_RECORD_FOUND");
 #endif
                         mesg->status = FP_BASIC_RECORD_FOUND;   
                         ya_result rrl = zdb_query_message_update_with_rrl(mesg, &ans_auth_add, rrl_process);
@@ -4887,7 +4892,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                                                                             &ans_auth_add,
                                                                             &additionals_dname_set);
 #ifdef DEBUG
-                        log_debug("zdb_query_and_update_with_rrl:: FP_BASIC_RECORD_NOTFOUND (done)");
+                        log_debug("zdb_query_and_update_with_rrl: FP_BASIC_RECORD_NOTFOUND (done)");
 #endif
                         mesg->status = (finger_print)return_value;   
                         ya_result rrl = zdb_query_message_update_with_rrl(mesg, &ans_auth_add, rrl_process);
@@ -5070,7 +5075,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
 #endif // ZDB_HAS_DNSSEC_SUPPORT
                             
 #ifdef DEBUG
-                            log_debug("zdb_query_and_update_with_rrl:: FP_BASIC_RECORD_FOUND (any)");
+                            log_debug("zdb_query_and_update_with_rrl: FP_BASIC_RECORD_FOUND (any)");
 #endif
                             mesg->status = FP_BASIC_RECORD_FOUND;   
                             ya_result rrl = zdb_query_message_update_with_rrl(mesg, &ans_auth_add, rrl_process);
@@ -5214,8 +5219,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                                      * Append the NSEC of rr_label and all its signatures
                                      */
 
-                                    u32 min_ttl = 900;
-
+                                    s32 min_ttl;
                                     zdb_zone_getminttl(zone, &min_ttl);
                                     zdb_query_ex_append_nsec_records(rr_label_authority, authority_qname, min_ttl,
                                                                      PASS_ZCLASS_PARAMETER
@@ -5226,9 +5230,9 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                             }
                         }
                         
-                        ans_auth_add.delegation = 1;
+                        ans_auth_add.delegation = 1; // no answer, NS records in authority : referral
 #ifdef DEBUG
-                        log_debug("zdb_query_and_update_with_rrl:: FP_BASIC_LABEL_NOTFOUND (done)");
+                        log_debug("zdb_query_and_update_with_rrl: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
                         /* ans_auth_add.is_delegation = TRUE; later */
                         
@@ -5296,7 +5300,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
     if(zone == NULL)    // zone is ALWAYS assigned because top is >= 0
     {
 #ifdef DEBUG
-        log_debug("zdb_query_and_update_with_rrl:: FP_NOZONE_FOUND (2)");
+        log_debug("zdb_query_and_update_with_rrl: FP_NOZONE_FOUND (2)");
 #endif
         
         mesg->status = FP_NOZONE_FOUND;   
@@ -5355,9 +5359,11 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                         &wild_closer_encloser,
                         &wild_closer_encloser_rrsig);
 
-                int min_ttl = zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add.authority, pool);
+                s32 min_ttl;
+                zdb_zone_getminttl(zone, &min_ttl);
+                zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add.authority, pool);
 #ifdef DEBUG
-                log_debug("zdb_query_and_update_with_rrl:: nsec3_name_error: next_closer_owner: %{dnsname}", next_closer_owner);
+                log_debug("zdb_query_and_update_with_rrl: nsec3_name_error: next_closer_owner: %{dnsname}", next_closer_owner);
 #endif
 
                 if(next_closer != NULL /*&& next_closer_rrsig != NULL*/)
@@ -5377,7 +5383,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                 if(closer_encloser != NULL/* && closer_encloser_rrsig != NULL*/)
                 {
 #ifdef DEBUG
-                    log_debug("zdb_query_and_update_with_rrl:: nsec3_name_error: closer_encloser_owner: %{dnsname}", closer_encloser_owner);
+                    log_debug("zdb_query_and_update_with_rrl: nsec3_name_error: closer_encloser_owner: %{dnsname}", closer_encloser_owner);
 #endif
                     zdb_query_ex_answer_append_ttl(closer_encloser, closer_encloser_owner,
                                                    PASS_ZCLASS_PARAMETER
@@ -5394,7 +5400,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                 if(wild_closer_encloser != NULL)
                 {
 #ifdef DEBUG
-                    log_debug("zdb_query_and_update_with_rrl:: nsec3_name_error: wild_closer_encloser_owner: %{dnsname}", wild_closer_encloser_owner);
+                    log_debug("zdb_query_and_update_with_rrl: nsec3_name_error: wild_closer_encloser_owner: %{dnsname}", wild_closer_encloser_owner);
 #endif
                     zdb_query_ex_answer_append_ttl(wild_closer_encloser, wild_closer_encloser_owner,
                                                    PASS_ZCLASS_PARAMETER
@@ -5408,7 +5414,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                     }
                 }
 #ifdef DEBUG
-                log_debug("zdb_query_and_update_with_rrl:: FP_NSEC3_LABEL_NOTFOUND (done)");
+                log_debug("zdb_query_and_update_with_rrl: FP_NSEC3_LABEL_NOTFOUND (done)");
 #endif
                 
                 mesg->status = FP_NSEC3_LABEL_NOTFOUND;   
@@ -5506,7 +5512,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                     }
                 }            
 #ifdef DEBUG
-                log_debug("zdb_query_and_update_with_rrl:: FP_NSEC_LABEL_NOTFOUND (done)");
+                log_debug("zdb_query_and_update_with_rrl: FP_NSEC_LABEL_NOTFOUND (done)");
 #endif          
                 mesg->status = FP_NSEC_LABEL_NOTFOUND;   
                 ya_result rrl = zdb_query_message_update_with_rrl(mesg, &ans_auth_add, rrl_process);
@@ -5525,7 +5531,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
     
         zdb_query_ex_answer_append_soa_nttl(zone, &ans_auth_add.authority, pool);
 #ifdef DEBUG
-        log_debug("zdb_query_and_update_with_rrl:: FP_BASIC_LABEL_NOTFOUND (done)");
+        log_debug("zdb_query_and_update_with_rrl: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
         
         mesg->status = FP_BASIC_LABEL_NOTFOUND;   
@@ -5543,7 +5549,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
     else // if(!ZDB_ZONE_INVALID(zone))
     {
 #ifdef DEBUG
-        log_debug("zdb_query_and_update_with_rrl:: FP_ZONE_EXPIRED (2)");
+        log_debug("zdb_query_and_update_with_rrl: FP_ZONE_EXPIRED (2)");
 #endif
         
         mesg->status = FP_INVALID_ZONE;   

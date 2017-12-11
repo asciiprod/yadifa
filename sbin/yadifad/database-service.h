@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -43,6 +43,7 @@
 #include <dnscore/thread_pool.h>
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb_zone.h>
+#include <dnsdb/zdb_zone_write.h>
 
 #include "server.h"
 
@@ -50,37 +51,42 @@
 
 #include "zone.h"
 
-#define DATABASE_SERVICE_STOP                   0
+#define DATABASE_SERVICE_STOP                    0
 
-#define DATABASE_SERVICE_ZONE_DESC_LOAD         1
-#define DATABASE_SERVICE_ZONE_DESC_UNLOAD       2
+#define DATABASE_SERVICE_ZONE_DESC_LOAD          1
+#define DATABASE_SERVICE_ZONE_DESC_UNLOAD        2
 
-// #define DATABASE_SERVICE_ZONE_DESC_PROCESS      4   // not used
-// #define DATABASE_SERVICE_ORIGIN_PROCESS         5   // not used
+#define DATABASE_SERVICE_ZONE_LOAD               3
+#define DATABASE_SERVICE_ZONE_LOADED_EVENT       4
 
-#define DATABASE_SERVICE_ZONE_LOAD              6
-#define DATABASE_SERVICE_ZONE_MOUNT             7
-#define DATABASE_SERVICE_ZONE_UNMOUNT           8
-#define DATABASE_SERVICE_ZONE_UNLOAD            9
-#define DATABASE_SERVICE_ZONE_SAVE_TEXT        10
+#define DATABASE_SERVICE_ZONE_MOUNT              5
+#define DATABASE_SERVICE_ZONE_MOUNTED_EVENT      6
 
-#define DATABASE_SERVICE_QUERY_AXFR             11
-#define DATABASE_SERVICE_QUERY_IXFR             12
-#define DATABASE_SERVICE_SET_DROP_AFTER_RELOAD  13
-#define DATABASE_SERVICE_DO_DROP_AFTER_RELOAD   14
-#define DATABASE_SERVICE_ZONE_MOUNTED_EVENT     15
-#define DATABASE_SERVICE_ZONE_LOADED_EVENT      16
-#define DATABASE_SERVICE_ZONE_UNLOADED_EVENT    17
-#define DATABASE_SERVICE_ZONE_UNMOUNTED_EVENT   18
-#define DATABASE_SERVICE_ZONE_DOWNLOADED_EVENT  19
+#define DATABASE_SERVICE_ZONE_UNMOUNT            7
+#define DATABASE_SERVICE_ZONE_UNMOUNTED_EVENT    8
 
-#define DATABASE_SERVICE_RECONFIGURE_BEGIN      20
-#define DATABASE_SERVICE_RECONFIGURE_END        21
+#define DATABASE_SERVICE_ZONE_UNLOAD             9
+#define DATABASE_SERVICE_ZONE_UNLOADED_EVENT    10
 
-#define DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES 22
+#define DATABASE_SERVICE_ZONE_SAVE_TEXT         11
 
-#define DATABASE_SERVICE_ZONE_FREEZE            23
-#define DATABASE_SERVICE_ZONE_UNFREEZE          24
+#define DATABASE_SERVICE_QUERY_AXFR             12
+#define DATABASE_SERVICE_QUERY_IXFR             13
+#define DATABASE_SERVICE_ZONE_DOWNLOADED_EVENT  14
+
+#define DATABASE_SERVICE_SET_DROP_AFTER_RELOAD  15
+#define DATABASE_SERVICE_CLEAR_DROP_AFTER_RELOAD 16
+#define DATABASE_SERVICE_DO_DROP_AFTER_RELOAD   17
+
+#define DATABASE_SERVICE_RECONFIGURE_BEGIN      18
+#define DATABASE_SERVICE_RECONFIGURE_END        19
+#define DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES 20
+#define DATABASE_SERVICE_ZONE_FREEZE            21
+#define DATABASE_SERVICE_ZONE_UNFREEZE          22
+
+#define DATABASE_SERVICE_ZONE_PROCESSED         23
+
+#define DATABASE_SERVICE_CALLBACK               24
 
 //
 #define DATABASE_SERVICE_OPERATION_COUNT        25
@@ -184,6 +190,31 @@ struct database_message_zone_downloaded_event_s
     ya_result result_code;
 };
 
+struct database_message_drop_after_reload_s
+{
+    u8  type;
+    ptr_set zone_set;
+    bool do_subset;
+};
+
+/**
+ * void* args
+ * bool delete_only (do not run the task, just cleanup the args)
+ */
+
+typedef void (*database_message_callback_function)(void*, bool);
+
+struct database_message_callback_s
+{
+    u8  type;
+    database_message_callback_function callback;
+    void* args;
+    u64 timestamp;
+    const char * name;
+};
+
+typedef struct database_message_callback_s database_message_callback_s;
+
 ///
 
 typedef struct database_message database_message;
@@ -216,6 +247,10 @@ struct database_message
         struct database_message_zone_unloaded_event_s zone_unloaded_event;
         struct database_message_zone_unmounted_event_s zone_unmounted_event;
         struct database_message_zone_downloaded_event_s zone_downloaded_event;
+        // struct database_message_zone_processed_event_s zone_processed_event;
+        
+        struct database_message_drop_after_reload_s drop_after_reload;
+        struct database_message_callback_s callback;
         
     } payload;
 };
@@ -276,7 +311,12 @@ void database_zone_save_ex(const u8 *origin, bool clear_journal);
  * @return 
  */
 
-ya_result database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, bool save_unmodified);
+#define DATABASE_SERVICE_ZONE_SAVE_DEFAULTS ZDB_ZONE_WRITE_TEXT_FILE_DEFAULTS
+#define DATABASE_SERVICE_ZONE_SAVE_FORCE_LABEL ZDB_ZONE_WRITE_TEXT_FILE_FORCE_LABEL
+#define DATABASE_SERVICE_ZONE_SAVE_IGNORE_SHUTDOWN ZDB_ZONE_WRITE_TEXT_FILE_IGNORE_SHUTDOWN
+#define DATABASE_SERVICE_ZONE_SAVE_UNMODIFIED 4
+
+ya_result database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, u8 flags);
 
 /// @note HAS_DYNAMIC_PROVISIONING
 
@@ -394,14 +434,18 @@ ya_result database_zone_set_type(const u8 *origin, u8 master_slave_etc);
 
 ya_result database_zone_apply(const u8* origin);
 
-
-void database_set_drop_after_reload();
-
+void database_set_drop_after_reload_for_set(const ptr_set *fqdn_set);
+/*
+void database_clear_drop_after_reload();
 void database_do_drop_after_reload();
+*/
+
+void database_zone_reconfigure_do_drop_and_disable(bool do_drop_after_reload);
 
 bool database_zone_is_reconfigure_enabled();
 
 bool database_zone_try_reconfigure_enable();
+
 void database_zone_reconfigure_disable();
 
 void database_zone_postpone_reconfigure_all();
@@ -531,6 +575,16 @@ void database_zone_update_signatures(const u8 *origin, zone_desc_s *expected_zon
 
 /**
  * 
+ * Sets an alarm to enqueue a zone maintenance at a given time (best effort)
+ * 
+ * @param zone
+ * @param at
+ */
+
+void database_zone_update_signatures_at(zdb_zone *zone, u32 at);
+
+/**
+ * 
  * Creates an empty, invalid zone for every single registered zone descriptor (config)
  * 
  */
@@ -540,5 +594,9 @@ void database_service_create_invalid_zones();
 bool database_service_is_running();
 
 void database_service_run_garbage_collector();
+
+void database_fire_zone_processed(zone_desc_s *zone_desc);
+
+void database_post_callback(database_message_callback_function callback, void *args, const char * const name);
 
 /** @} */

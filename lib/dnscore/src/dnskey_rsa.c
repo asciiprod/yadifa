@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -64,7 +64,13 @@
 
 #define MODULE_MSG_HANDLE g_system_logger
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#define KEYRSA_TAG 0x41535259454b
+
+#ifndef SSL_API
+#error "SSL_API not defined"
+#endif
+
+#if SSL_API_LT_110
 
 #define SSL_FIELD_GET(st_,f_) if(f_ != NULL) { *f_ = st_->f_; }
 #define SSL_FIELD_SET(st_,f_) if(f_ != NULL) { BN_free(st_->f_); st_->f_ = f_; }
@@ -202,7 +208,7 @@ static const struct dnskey_field_access RSA_field_access[] ={
     {"Exponent1", offsetof(struct dnskey_rsa,dmp1), STRUCTDESCRIPTOR_BN},
     {"Exponent2", offsetof(struct dnskey_rsa,dmq1), STRUCTDESCRIPTOR_BN},
     {"Coefficient", offsetof(struct dnskey_rsa,iqmp), STRUCTDESCRIPTOR_BN},
-    {NULL, 0, 0}
+    {"", 0, 0}
 };
 
 static int
@@ -298,7 +304,7 @@ dnskey_rsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, signature, signature_len, 32);
 #endif
     
-#if OPENSSL_VERSION_NUMBER < 0x10000000L
+#if SSL_API_LT_100
     int err = RSA_verify(key->nid, digest, digest_len, (unsigned char*)signature, signature_len, key->key.rsa);
 #else
     int err = RSA_verify(key->nid, digest, digest_len, signature, signature_len, key->key.rsa);
@@ -389,7 +395,7 @@ dnskey_rsa_public_load(const u8* rdata, u16 rdata_size)
 
     yassert(rsa != NULL);
 
-    RSA_set0_key(rsa, exponent, modulus, NULL);
+    RSA_set0_key(rsa, modulus, exponent, NULL);
 
     BN_CTX_free(ctx);
 
@@ -655,13 +661,13 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
        (yrsa->dmq1 == NULL) ||
        (yrsa->iqmp == NULL))
     {
-        return ERROR;
+        return DNSSEC_ERROR_INCOMPLETEKEY;
     }
     
     if((yrsa->p == NULL) != (yrsa->q == NULL))
     {
         // half a private key is wrong
-        return ERROR;
+        return DNSSEC_ERROR_INCOMPLETEKEY;
     }
     
     int nid;
@@ -725,7 +731,7 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
     }
     else
     {
-        return ERROR;
+        return DNSSEC_ERROR_INCOMPLETEKEY;
     }
 }
         
@@ -753,7 +759,7 @@ void
 dnskey_rsa_parse_init(dnskey_field_parser *fp)
 {
     struct dnskey_rsa *yrsa;
-    ZALLOC_OR_DIE(struct dnskey_rsa *, yrsa, struct dnskey_rsa, GENERIC_TAG);
+    ZALLOC_OR_DIE(struct dnskey_rsa *, yrsa, struct dnskey_rsa, KEYRSA_TAG);
     ZEROMEMORY(yrsa, sizeof(struct dnskey_rsa));
     fp->data = yrsa;
     fp->vtbl = &rsa_field_parser_vtbl;

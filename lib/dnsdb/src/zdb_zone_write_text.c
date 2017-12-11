@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief
@@ -139,14 +139,7 @@ zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding
         output_stream_write(os, "O", 1);
     }
 #endif
-    
-#if ZDB_HAS_DNSSEC_SUPPORT
-    if((flags & ZDB_RR_LABEL_DNSSEC_EDIT) != 0)
-    {
-        output_stream_write(os, "E", 1);
-    }
-#endif
-    
+       
     if((flags & ZDB_RR_APEX_LABEL_FROZEN) != 0)
     {
         output_stream_write(os, "F", 1);
@@ -155,11 +148,6 @@ zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding
     if((flags & ZDB_RR_LABEL_GOT_WILD) != 0)
     {
         output_stream_write(os, "*", 1);
-    }
-    
-    if((flags & ZDB_RR_LABEL_UPDATING) != 0)
-    {
-        output_stream_write(os, "U", 1);
     }
     
     if((flags & ZDB_RR_LABEL_DELEGATION) != 0)
@@ -186,6 +174,16 @@ zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding
     {
         output_stream_write(os, "I", 1);
     }
+    
+    if((flags & ZDB_RR_LABEL_N3COVERED) != 0)
+    {
+        output_stream_write(os, "S", 1);
+    }
+    
+    if((flags & ZDB_RR_LABEL_N3OCOVERED) != 0)
+    {
+        output_stream_write(os, "s", 1);
+    }
 }
 #endif
 
@@ -196,7 +194,7 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
     ya_result ret;
     
-    u32 current_ttl = DEFAULT_TTL;
+    s32 current_ttl = DEFAULT_TTL;
 #if ZDB_HAS_NSEC3_SUPPORT
     u32 soa_nttl = zone->min_ttl;
 #endif
@@ -205,6 +203,8 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 #if ZDB_HAS_NSEC3_SUPPORT
     u32 dot_origin_len;
 #endif
+    
+    yassert(zdb_zone_islocked_weak(zone));
         
     if(FAIL(ret = buffer_output_stream_init(&bos, fos, OUTPUT_BUFFER_SIZE)))
     {
@@ -213,7 +213,7 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
     
 #ifdef DEBUG
     format_writer status_flags_fw = {zdb_zone_rr_label_flags_format, NULL};
-    osprintln(&bos, "; A=apex 1=NSEC 3=NSEC3 O=NSEC3-OPTOUT E=dnssec-edited F=frozen/loading *=wildcard present U=updating D=at-delegation d=under-delegation C=has-CNAME c=no-CNAME-allowed I=invalid-zone");
+    osprintln(&bos, "; A=apex 1=NSEC 3=NSEC3 O=NSEC3-OPTOUT F=frozen/loading *=wildcard present D=at-delegation d=under-delegation C=has-CNAME c=no-CNAME-allowed I=invalid-zone S=NSEC3-covered s=NSEC3-optout-covered");
 #endif
 
     char label_cstr[2 + MAX_DOMAIN_LENGTH + 1];
@@ -327,7 +327,9 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
             zdb_packed_ttlrdata* ttlrdata_sll = (zdb_packed_ttlrdata*)node->data;
             
-            u32 rrset_ttl = ttlrdata_sll->ttl;
+            current_ttl = DEFAULT_TTL;
+            
+            s32 rrset_ttl = ttlrdata_sll->ttl;
 
             while(ttlrdata_sll != NULL)
             {
@@ -339,7 +341,6 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                 {
                     osprint_tab_padded(&bos, NULL, 0, INDENT_TABS);
                 }
-                
                 
                 if(current_ttl != rrset_ttl)
                 {
@@ -361,7 +362,6 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 #else
                 output_stream_write(&bos, (const u8*)__LF__, 1);
 #endif
-
                 if(FAIL(ret))
                 {
                     osprintln(&bos, ";; ABOVE RECORD IS CORRUPTED");
@@ -372,6 +372,25 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                 ttlrdata_sll = ttlrdata_sll->next;
             }
         }
+        
+#ifdef DEBUG
+        if(btree_isempty(label->resource_record_set))
+        {
+            osprint(&bos, ";; ");
+            output_stream_write(&bos, label_cstr, label_len);
+            
+            status_flags_fw.value = &label->flags;
+            
+            if(label->sub.count == 0)
+            {
+                osformatln(&bos, " is empty terminal ; flags=%w", &status_flags_fw);
+            }
+            else
+            {
+                osformatln(&bos, " is empty non-terminal ; flags=%w", &status_flags_fw);
+            }
+        }
+#endif
     }
 
 #if ZDB_HAS_NSEC3_SUPPORT
@@ -380,157 +399,180 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
      * If the zone is NSEC3, print the nsec3 data
      */
 
-    if(zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3PARAM) != NULL)
+    const nsec3_zone* n3 = zone->nsec.nsec3;
+
+    while(n3 != NULL)
     {
-        const nsec3_zone* n3 = zone->nsec.nsec3;
+        u8 rdata[TYPE_BIT_MAPS_MAX_RDATA_SIZE];
 
-        while(n3 != NULL)
+        u32 rdata_hash_offset = NSEC3_ZONE_RDATA_SIZE(n3);
+
+        MEMCOPY(rdata, &n3->rdata[0], NSEC3_ZONE_RDATA_SIZE(n3));
+
+        nsec3_avl_iterator nsec3_items_iter;
+        nsec3_avl_iterator_init(&n3->items, &nsec3_items_iter);
+
+        if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
         {
-            u8 rdata[TYPE_BIT_MAPS_MAX_RDATA_SIZE];
+            nsec3_zone_item* first = nsec3_avl_iterator_next_node(&nsec3_items_iter);
+            nsec3_zone_item* item = first;
+            nsec3_zone_item* next_item;
 
-            u32 rdata_hash_offset = NSEC3_ZONE_RDATA_SIZE(n3);
+            u8 digest_len = NSEC3_NODE_DIGEST_SIZE(first);
 
-            MEMCOPY(rdata, &n3->rdata[0], NSEC3_ZONE_RDATA_SIZE(n3));
-
-            nsec3_avl_iterator nsec3_items_iter;
-            nsec3_avl_iterator_init(&n3->items, &nsec3_items_iter);
-
-            if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
+            do
             {
-                nsec3_zone_item* first = nsec3_avl_iterator_next_node(&nsec3_items_iter);
-                nsec3_zone_item* item = first;
-                nsec3_zone_item* next_item;
-
-                u8 digest_len = NSEC3_NODE_DIGEST_SIZE(first);
-
-                do
+                if(allow_shutdown && dnscore_shuttingdown())
                 {
-                    if(allow_shutdown && dnscore_shuttingdown())
-                    {
-                        output_stream_close(&bos);
+                    output_stream_close(&bos);
 
-                        return STOPPED_BY_APPLICATION_SHUTDOWN;
-                    }
-                    
-                    if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
+                    return STOPPED_BY_APPLICATION_SHUTDOWN;
+                }
+
+                if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
+                {
+                    next_item = nsec3_avl_iterator_next_node(&nsec3_items_iter);
+                }
+                else
+                {
+                    next_item = first;
+                }
+
+                rdata[1] = item->flags;
+#ifdef DEBUG
+                if(item->rc == 1)
+                {
+                    if(item->rc != 0)
                     {
-                        next_item = nsec3_avl_iterator_next_node(&nsec3_items_iter);
+                        if(item->label.owner != NSEC3_ZONE_FAKE_OWNER)
+                        {
+                            if(item->label.owner->name[0] != 0)
+                            {
+                                osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owner->name);
+                            }
+                            else
+                            {
+                                osformatln(&bos, ";; Owner: %{dnslabel} (the apex)", zone->origin);
+                            }
+                        }
+                        else
+                        {
+                            osprintln(&bos, ";; Owner: FAKE (Owned by the parents of the zone)");
+                        }
                     }
                     else
                     {
-                        next_item = first;
+                        osprintln(&bos, ";; Owner: ERROR : RC=0");
                     }
-
-                    rdata[1] = item->flags;
-
-#ifdef DEBUG
-                    if(item->rc == 1)
+                }
+                else
+                {
+                    if(item->rc > 0)
                     {
-                        if(item->rc != 0)
+                        s32 i = item->rc - 1;
+                        do
                         {
-                            if(item->label.owner != NSEC3_ZONE_FAKE_OWNER)
+                            if(item->label.owners[i] != NSEC3_ZONE_FAKE_OWNER)
                             {
-                                osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owner->name);
+                                if(item->label.owners[i]->name[0] != 0)
+                                {
+                                    osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owners[i]->name);
+                                }
+                                else
+                                {
+                                    osformatln(&bos, ";; Owner: %{dnslabel} (the apex)", zone->origin);
+                                }
                             }
                             else
                             {
                                 osprintln(&bos, ";; Owner: FAKE (Owned by the parents of the zone)");
                             }
                         }
-                        else
-                        {
-                            osprintln(&bos, ";; Owner: ERROR : RC=0");
-                        }
+                        while(i-- > 0);
                     }
                     else
                     {
-                        if(item->rc > 0)
-                        {
-                            u16 i = item->rc - 1;
-                            do
-                            {
-                                if(item->label.owners[i] != NSEC3_ZONE_FAKE_OWNER)
-                                {
-                                    osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owners[i]->name);
-                                }
-                                else
-                                {
-                                    osprintln(&bos, ";; Owner: FAKE (Owned by the parents of the zone)");
-                                }
-                            }
-                            while(i-- > 0);
-                        }
-                        else
-                        {
-                            osprintln(&bos, ";; NO OWNER");
-                        }
+                        osprintln(&bos, ";; NO OWNER");
                     }
+                }
 
-                    if(item->sc <= 1)
+                if(item->sc <= 1)
+                {
+                    if(item->sc != 0)
                     {
-                        if(item->sc != 0)
+                        if(item->star_label.owner->name[0] != 0)
                         {
                             osformatln(&bos, ";; Star: %{dnslabel}", item->star_label.owner->name);
                         }
+                        else
+                        {
+                            osformatln(&bos, ";; Star: %{dnslabel} (the apex)", zone->origin);
+                        }
                     }
-                    else
+                }
+                else
+                {
+                    s32 i = item->sc - 1;
+                    do
                     {
-                        u16 i = item->sc - 1;
-                        do
+                        if(item->star_label.owners[i]->name[0] != 0)
                         {
                             osformatln(&bos, ";; Star: %{dnslabel}", item->star_label.owners[i]->name);
                         }
-                        while(i-- > 0);
+                        else
+                        {
+                            osformatln(&bos, ";; Star: %{dnslabel} (the apex)", zone->origin);
+                        }
                     }
+                    while(i-- > 0);
+                }
 #endif
-                    u32 rdata_size = rdata_hash_offset;
+                u32 rdata_size = rdata_hash_offset;
 
-                    MEMCOPY(&rdata[rdata_size], next_item->digest, digest_len + 1);
-                    rdata_size += digest_len + 1;
+                MEMCOPY(&rdata[rdata_size], next_item->digest, digest_len + 1);
+                rdata_size += digest_len + 1;
 
-                    MEMCOPY(&rdata[rdata_size], item->type_bit_maps, item->type_bit_maps_size);
-                    rdata_size += item->type_bit_maps_size;
+                MEMCOPY(&rdata[rdata_size], item->type_bit_maps, item->type_bit_maps_size);
+                rdata_size += item->type_bit_maps_size;
 
-                    ya_result hex32_len;
-                    
-                    if(FAIL(hex32_len = output_stream_write_base32hex(&bos, NSEC3_NODE_DIGEST_PTR(item), digest_len)))
-                    {
-                        return hex32_len;
-                    }
-                    
-                    output_stream_write(&bos, (const u8*)dot_origin, dot_origin_len);
-                    output_stream_write_u8(&bos, (u8)'\t');
-                    
-                    osformat(&bos, "%-" TOSTRING(TTL_SIZE) "u\tNSEC3\t", soa_nttl);
-                    osprint_rdata(&bos, TYPE_NSEC3, rdata, rdata_size);
+                ya_result hex32_len;
+
+                if(FAIL(hex32_len = output_stream_write_base32hex(&bos, NSEC3_NODE_DIGEST_PTR(item), digest_len)))
+                {
+                    return hex32_len;
+                }
+
+                output_stream_write(&bos, (const u8*)dot_origin, dot_origin_len);
+                output_stream_write_u8(&bos, (u8)'\t');
+
+                osformat(&bos, "%-" TOSTRING(TTL_SIZE) "u\tNSEC3\t", soa_nttl);
+                osprint_rdata(&bos, TYPE_NSEC3, rdata, rdata_size);
+                osprintln(&bos, "");
+
+                zdb_packed_ttlrdata* rrsig = item->rrsig;
+
+                while(rrsig != NULL)
+                {
+                    u32 tabs = ((hex32_len+ dot_origin_len) / TAB_SIZE) + 1 + (TTL_SIZE/TAB_SIZE) + 1;
+
+                    osformat(&bos, "%tRRSIG\t", tabs); /* ${} requires a pointer to the data */
+
+                    osprint_rdata(&bos, TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
+
                     osprintln(&bos, "");
 
-                    zdb_packed_ttlrdata* rrsig = item->rrsig;
-
-                    while(rrsig != NULL)
-                    {
-                        u32 tabs = ((hex32_len+ dot_origin_len) / TAB_SIZE) + 1 + (TTL_SIZE/TAB_SIZE) + 1;
-
-                        osformat(&bos, "%tRRSIG\t", tabs); /* ${} requires a pointer to the data */
-
-                        osprint_rdata(&bos, TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
-
-                        osprintln(&bos, "");
-
-                        rrsig = rrsig->next;
-                    }
-
-                    item = next_item;
+                    rrsig = rrsig->next;
                 }
-                while(next_item != first);
 
-            } /* If there is a first item*/
+                item = next_item;
+            }
+            while(next_item != first);
 
-            n3 = n3->next;
+        } /* If there is a first item*/
 
-        } /* while n3 != NULL */
+        n3 = n3->next;
 
-    }
+    } /* while n3 != NULL */
 
 #endif
 
@@ -541,13 +583,6 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
     return SUCCESS;
 }
 
-ya_result
-zdb_zone_write_text(const zdb_zone *zone, output_stream *fos, bool force_label)
-{
-    ya_result ret;
-    ret = zdb_zone_write_text_ex(zone, fos, force_label, TRUE);
-    return ret;
-}
 
 /*
  * Without buffering:
@@ -560,8 +595,19 @@ zdb_zone_write_text(const zdb_zone *zone, output_stream *fos, bool force_label)
  *
  */
 
+/**
+ * 
+ * Zone MUST be locked 
+ * Note that the one caller locks the zone.
+ * 
+ * @param zone
+ * @param output_file
+ * @param force_label
+ * @return 
+ */
+
 ya_result
-zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool force_label)
+zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, u8 flags)
 {
     output_stream fos;
     ya_result ret;
@@ -572,7 +618,8 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
         rnd = thread_pool_get_random_ctx();
     }
     
-    bool allow_shutdown = TRUE;
+    bool force_label = flags & ZDB_ZONE_WRITE_TEXT_FILE_FORCE_LABEL;
+    bool allow_shutdown = flags & ZDB_ZONE_WRITE_TEXT_FILE_IGNORE_SHUTDOWN;
     char tmp[PATH_MAX];
     
     size_t output_file_len = strlen(output_file);
@@ -608,7 +655,7 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
     
     if(ISOK(ret = file_output_stream_create(&fos, tmp, FILE_RIGHTS)))
     {
-        if(ISOK(ret = zdb_zone_write_text_ex(zone, &fos, force_label, allow_shutdown)))
+        if(ISOK(ret = zdb_zone_write_text_ex(zone, &fos, force_label, allow_shutdown))) // zone is locked
         {
             if(file_is_link(output_file) > 0)
             {
@@ -645,6 +692,3 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

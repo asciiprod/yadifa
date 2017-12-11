@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2017, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup alarm
  *  @ingroup dnscore
  *  @brief Alarm functions
@@ -46,8 +46,6 @@
 #ifdef DEBUG
 #include "dnscore/timeformat.h"
 #endif // DEBUG
-
-#define HAS_ALARM_DUMP 0
 
 #define MODULE_MSG_HANDLE g_system_logger
 extern logger_handle *g_system_logger;
@@ -111,7 +109,6 @@ static smp_int alarm_event_instanciated = SMP_INT_INITIALIZER;
 static void alarm_handle_close(alarm_handle *handle_struct);
 
 /**/
-
 
 /**
  * Allocates an uninitialised event node.
@@ -1041,10 +1038,6 @@ alarm_run_tick(u32 epoch)
     
     s64 total_run = 0;
     
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = FALSE;
-#endif
-    
     pthread_mutex_unlock(&alarm_mutex);
     
     ptr_vector rearm = EMPTY_PTR_VECTOR;
@@ -1057,7 +1050,7 @@ alarm_run_tick(u32 epoch)
 #endif
             /* EXECUTE EVENT */
 
-            log_debug("alarm: running %p: %p(%p) '%s'", event, event->function, event->args, event->text);
+            log_debug("alarm: '%s': %p: %p(%p) running (expected for %T)", event->text, event, event->function, event->args, event->epoch);
 
             s64 event_run_start = timeus();
 
@@ -1066,11 +1059,10 @@ alarm_run_tick(u32 epoch)
             s64 event_run_stop = timeus();
 
             total_run += event_run_stop - event_run_start;
-
             double event_run_delta_ms = (double)(event_run_stop - event_run_start);
             event_run_delta_ms /= 1000.0;
 
-            log_debug("alarm: %p returned %r (%.3fms elapsed)", event, ret, event_run_delta_ms);
+            log_debug("alarm: '%s': %p: %p(%p) returned %r (%.3fms elapsed)", event->text, event, event->function, event->args, ret, event_run_delta_ms);
 
             alarm_event_node *event_time_next;
 
@@ -1086,18 +1078,25 @@ alarm_run_tick(u32 epoch)
             }
             
             event = event_time_next;
-#if 1
         }
         else
         {
             alarm_event_node *event_time_next = event->time_next;
+                        
+            log_debug("alarm: '%s': %p: %p(%p): cancelling (expected for %T)", event->text, event, event->function, event->args, event->epoch);
             
-            log_debug("alarm: cancelling %p: %p(%p) '%s'", event, event->function, event->args, event->text);
-            event->function(event->args, TRUE);
+            s64 event_run_start = timeus();
+            ya_result ret = event->function(event->args, TRUE);
+            s64 event_run_stop = timeus();
+            
+            total_run += event_run_stop - event_run_start;
+            double event_run_delta_ms = (double)(event_run_stop - event_run_start);
+            event_run_delta_ms /= 1000.0;
+            
+            log_debug("alarm: '%s': %p: %p(%p) cancelled %r (%.3fms elapsed)", event->text, event, event->function, event->args, ret, event_run_delta_ms);
             
             event = event_time_next;
         }
-#endif
     }
     
     for(int i = 0; i <= ptr_vector_last_index(&rearm); ++i)
