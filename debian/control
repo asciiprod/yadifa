@@ -3,10 +3,9 @@ Section: net
 Priority: optional
 Maintainer: Markus Schade <markus.schade@gmail.com>
 Build-Depends:
- dh-autoreconf,
- debhelper (>= 9.20160709),
+ debhelper,
  libssl-dev
-Standards-Version: 4.1.0
+Standards-Version: 4.1.3
 Homepage: http://www.yadifa.eu
 Vcs-Git: https://github.com/asciiprod/yadifa.git
 Vcs-Browser: https://github.com/asciiprod/yadifa.git
