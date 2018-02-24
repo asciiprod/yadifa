@@ -28,7 +28,7 @@ DEB_CONFIGURE_EXTRA_ARGS :=		\
 	$(NULL)
 
 %:
-	dh $@  --with autoreconf --with=systemd
+	dh $@
 
 override_dh_clean:
 	dh_clean
