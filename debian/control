@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: Markus Schade <markus.schade@gmail.com>
 Build-Depends:
- debhelper (>= 10),
+ debhelper (>= 11),
  libssl-dev
 Standards-Version: 4.1.3
 Homepage: http://www.yadifa.eu
