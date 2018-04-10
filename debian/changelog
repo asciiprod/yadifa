@@ -4,6 +4,7 @@ yadifa (2.3.8-1) unstable; urgency=medium
   * Update rules and compat to debhelper 11
   * Update standards version to 4.1.3
   * Update to watch version 4
+  * Update Maintainer to Debian DNS Packaging team
 
  -- Markus Schade <markus.schade@gmail.com>  Sat, 24 Feb 2018 18:19:01 +0100
 
