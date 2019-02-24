@@ -1,9 +1,10 @@
-yadifa (2.3.8-2) unstable; urgency=medium
+yadifa (2.3.9-1) unstable; urgency=medium
 
+  * New upstream version 2.3.9
   * Revert maintainer email as alioth is gone
-  * Update standards version to 4.1.4
+  * Update standards version to 4.3.0
 
- -- Markus Schade <markus.schade@gmail.com>  Thu, 28 Jun 2018 09:12:19 +0200
+ -- Markus Schade <markus.schade@gmail.com>  Sun, 24 Feb 2019 10:59:01 +0100
 
 yadifa (2.3.8-1) unstable; urgency=medium
 

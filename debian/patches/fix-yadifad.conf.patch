@@ -9,7 +9,7 @@ Subject: fix spelling, paths and lintian whatis warning
  
  .PP
 -${PREFIX}/etc/yadifad.conf 
-+/etc/yadifad.conf 
++/etc/yadifad.conf
  .PP
  .SH DESCRIPTION
  

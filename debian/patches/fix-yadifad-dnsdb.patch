@@ -1,0 +1,17 @@
+From: Markus Schade <markus.schade@gmail.com>
+Date: Sun, 24 Feb 2019 10:26:01 +0100
+Subject: fix lintian spelling warning in yadifad binary
+
+diff --git a/lib/dnsdb/src/zdb_zone.c b/lib/dnsdb/src/zdb_zone.c
+index 87f5d70..4916218 100644
+--- a/lib/dnsdb/src/zdb_zone.c
++++ b/lib/dnsdb/src/zdb_zone.c
+@@ -950,7 +950,7 @@ zdb_zone_update_zone_remove_add_dnskeys(zdb_zone *zone, ptr_vector *removed_keys
+         if(ISOK(ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_UPDATE_RUN)))
+         {
+             // done
+-            log_info("dnskey: %{dnsname}: keys update successfull", fqdn);
++            log_info("dnskey: %{dnsname}: keys update successful", fqdn);
+         }
+ 
+         if(FAIL(ret))

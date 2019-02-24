@@ -1,3 +1,4 @@
 fix-yadifa-manpage.patch
 fix-yadifad.conf.patch
 fix-yadifarc-manpage.patch
+fix-yadifad-dnsdb.patch
